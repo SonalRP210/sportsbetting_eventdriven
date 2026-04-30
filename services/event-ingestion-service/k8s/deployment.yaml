@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-ingestion-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: event-ingestion-service
+  template:
+    metadata:
+      labels:
+        app: event-ingestion-service
+    spec:
+      containers:
+        - name: event-ingestion-service
+          image: event-ingestion-service:latest
+          ports:
+            - containerPort: 8086
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8086
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8086

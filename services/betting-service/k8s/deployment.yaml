@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: betting-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: betting-service
+  template:
+    metadata:
+      labels:
+        app: betting-service
+    spec:
+      containers:
+        - name: betting-service
+          image: betting-service:latest
+          ports:
+            - containerPort: 8084
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8084
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8084

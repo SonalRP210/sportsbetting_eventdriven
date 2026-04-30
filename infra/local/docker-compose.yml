@@ -1,0 +1,90 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sb-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: sportsbetting
+      POSTGRES_USER: sportsbetting
+      POSTGRES_PASSWORD: sportsbetting
+
+  api-gateway:
+    build:
+      context: ../../services/api-gateway
+    container_name: sb-api-gateway
+    ports:
+      - "8070:8080"
+    depends_on:
+      - auth-service
+      - user-service
+      - betting-service
+      - wallet-service
+      - odds-service
+      - event-ingestion-service
+      - settlement-service
+      - notification-service
+      - risk-service
+
+  auth-service:
+    build:
+      context: ../../services/auth-service
+    container_name: sb-auth-service
+    ports:
+      - "8081:8080"
+
+  user-service:
+    build:
+      context: ../../services/user-service
+    container_name: sb-user-service
+    ports:
+      - "8082:8080"
+
+  wallet-service:
+    build:
+      context: ../../services/wallet-service
+    container_name: sb-wallet-service
+    ports:
+      - "8083:8080"
+
+  betting-service:
+    build:
+      context: ../../services/betting-service
+    container_name: sb-betting-service
+    ports:
+      - "8094:8084"
+
+  odds-service:
+    build:
+      context: ../../services/odds-service
+    container_name: sb-odds-service
+    ports:
+      - "8085:8080"
+
+  event-ingestion-service:
+    build:
+      context: ../../services/event-ingestion-service
+    container_name: sb-event-ingestion-service
+    ports:
+      - "8086:8080"
+
+  settlement-service:
+    build:
+      context: ../../services/settlement-service
+    container_name: sb-settlement-service
+    ports:
+      - "8087:8080"
+
+  notification-service:
+    build:
+      context: ../../services/notification-service
+    container_name: sb-notification-service
+    ports:
+      - "8088:8080"
+
+  risk-service:
+    build:
+      context: ../../services/risk-service
+    container_name: sb-risk-service
+    ports:
+      - "8089:8080"

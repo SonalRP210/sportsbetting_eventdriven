@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: odds-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: odds-service
+  template:
+    metadata:
+      labels:
+        app: odds-service
+    spec:
+      containers:
+        - name: odds-service
+          image: odds-service:latest
+          ports:
+            - containerPort: 8085
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8085
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8085

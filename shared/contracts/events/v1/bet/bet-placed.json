@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bet.placed.v1",
+  "type": "object",
+  "required": ["betId", "userId", "eventId", "selection", "stake", "odds", "placedAt"],
+  "properties": {
+    "betId": { "type": "string" },
+    "userId": { "type": "string" },
+    "eventId": { "type": "string" },
+    "selection": { "type": "string" },
+    "stake": { "type": "number" },
+    "odds": { "type": "number" },
+    "placedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

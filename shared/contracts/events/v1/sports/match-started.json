@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "sports.match.started.v1",
+  "type": "object",
+  "required": ["matchId", "sport", "startedAt"],
+  "properties": {
+    "matchId": { "type": "string" },
+    "sport": { "type": "string" },
+    "startedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

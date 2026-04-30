@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: settlement-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: settlement-service
+  template:
+    metadata:
+      labels:
+        app: settlement-service
+    spec:
+      containers:
+        - name: settlement-service
+          image: settlement-service:latest
+          ports:
+            - containerPort: 8087
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8087
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8087

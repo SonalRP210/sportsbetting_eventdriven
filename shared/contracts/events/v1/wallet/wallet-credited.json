@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wallet.credited.v1",
+  "type": "object",
+  "required": ["walletId", "userId", "amount", "currency", "transactionId", "creditedAt"],
+  "properties": {
+    "walletId": { "type": "string" },
+    "userId": { "type": "string" },
+    "amount": { "type": "number" },
+    "currency": { "type": "string" },
+    "transactionId": { "type": "string" },
+    "creditedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bet.accepted.v1",
+  "type": "object",
+  "required": ["betId", "userId", "acceptedAt"],
+  "properties": {
+    "betId": { "type": "string" },
+    "userId": { "type": "string" },
+    "acceptedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

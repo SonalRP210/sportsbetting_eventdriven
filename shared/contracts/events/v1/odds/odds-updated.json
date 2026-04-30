@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "odds.updated.v1",
+  "type": "object",
+  "required": ["eventId", "selection", "odds", "updatedAt"],
+  "properties": {
+    "eventId": { "type": "string" },
+    "selection": { "type": "string" },
+    "odds": { "type": "number" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,117 @@
+openapi: 3.0.3
+info:
+  title: Sportsbetting Public API
+  version: 0.1.0
+  description: Public gateway contract for event-driven sportsbetting platform.
+servers:
+  - url: /api/v1
+paths:
+  /bets:
+    post:
+      summary: Place a new bet
+      operationId: placeBet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceBetRequest'
+      responses:
+        '202':
+          description: Bet accepted for processing
+  /bets/{betId}:
+    get:
+      summary: Get bet by id
+      operationId: getBet
+      parameters:
+        - name: betId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bet details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetDetailResponse'
+        '404':
+          description: Bet not found
+  /bets/{betId}/cancel:
+    post:
+      summary: Cancel an open bet
+      operationId: cancelBet
+      parameters:
+        - name: betId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bet cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelBetResponse'
+        '400':
+          description: Invalid state for cancellation
+        '404':
+          description: Bet not found
+  /wallet/{userId}/balance:
+    get:
+      summary: Get wallet balance
+      operationId: getWalletBalance
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Balance details
+components:
+  schemas:
+    PlaceBetRequest:
+      type: object
+      required: [userId, eventId, selection, stake]
+      properties:
+        userId:
+          type: string
+        eventId:
+          type: string
+        selection:
+          type: string
+        stake:
+          type: number
+    BetDetailResponse:
+      type: object
+      required: [betId, userId, eventId, selection, stake, odds, status]
+      properties:
+        betId:
+          type: string
+        userId:
+          type: string
+        eventId:
+          type: string
+        selection:
+          type: string
+        stake:
+          type: number
+        odds:
+          type: number
+        status:
+          type: string
+          enum: [OPEN, CANCELLED, WON, LOST]
+    CancelBetResponse:
+      type: object
+      required: [betId, status, message]
+      properties:
+        betId:
+          type: string
+        status:
+          type: string
+        message:
+          type: string

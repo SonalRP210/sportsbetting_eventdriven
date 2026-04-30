@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risk-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: risk-service
+  template:
+    metadata:
+      labels:
+        app: risk-service
+    spec:
+      containers:
+        - name: risk-service
+          image: risk-service:latest
+          ports:
+            - containerPort: 8089
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8089
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8089

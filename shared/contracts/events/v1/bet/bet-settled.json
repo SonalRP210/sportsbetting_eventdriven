@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bet.settled.v1",
+  "type": "object",
+  "required": ["betId", "userId", "result", "payout", "settledAt"],
+  "properties": {
+    "betId": { "type": "string" },
+    "userId": { "type": "string" },
+    "result": { "type": "string", "enum": ["WON", "LOST", "VOID"] },
+    "payout": { "type": "number" },
+    "settledAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bet.rejected.v1",
+  "type": "object",
+  "required": ["betId", "userId", "reason", "rejectedAt"],
+  "properties": {
+    "betId": { "type": "string" },
+    "userId": { "type": "string" },
+    "reason": { "type": "string" },
+    "rejectedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
