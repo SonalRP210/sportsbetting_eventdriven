@@ -8,9 +8,9 @@ until rpk topic list --brokers "$BROKER" >/dev/null 2>&1; do
 done
 
 TOPICS=(
-  betting.bet.placed.v1 betting.bet.cancelled.v1 odds.odds.updated.v1 settlement.event.settled.v1
+  betting.bet.placed.v1 betting.bet.cancelled.v1 odds.updated.v1 settlement.event.settled.v1
   wallet.wallet.credited.v1 wallet.wallet.debited.v1 risk.exposure.updated.v1 notification.events.v1
-  betting.bet.placed.v1.dlq betting.bet.cancelled.v1.dlq odds.odds.updated.v1.dlq settlement.event.settled.v1.dlq
+  betting.bet.placed.v1.dlq betting.bet.cancelled.v1.dlq odds.updated.v1.dlq settlement.event.settled.v1.dlq
   wallet.wallet.credited.v1.dlq wallet.wallet.debited.v1.dlq risk.exposure.updated.v1.dlq notification.events.v1.dlq
 )
 

@@ -37,13 +37,15 @@ public class OddsUpdatedEventConsumer {
     }
 
     @KafkaListener(
-            topics = "${app.kafka.topic.oddsUpdated:odds.odds.updated.v1}",
+            topics = "${app.kafka.topic.oddsUpdated:odds.updated.v1}",
             groupId = "${app.kafka.group.betting.odds:betting-service-odds}"
     )
     @Transactional
     public void onOddsUpdated(String payload, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         processOnce(topic, payload, () -> {
             Map<String, Object> data = read(payload);
+            // updatedAt is optional in the shared contract until all consumers confirm they read it.
+            // The producer always sets it; this guard makes the consumer forward-compatible.
             bettingService.setOdds(
                     asString(data.get("eventId")),
                     asString(data.get("selection")),

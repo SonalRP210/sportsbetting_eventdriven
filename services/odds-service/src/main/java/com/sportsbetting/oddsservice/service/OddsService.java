@@ -54,10 +54,11 @@ public class OddsService {
             quote.setUpdatedAt(Instant.now());
             oddsQuoteRepository.save(quote);
 
-            persistOutbox("odds.odds.updated.v1", Map.of(
+            persistOutbox("odds.updated.v1", Map.of(
                     "eventId", update.eventId(),
                     "selection", update.selection(),
-                    "odds", normalized
+                    "odds", normalized,
+                    "updatedAt", Instant.now().toString()
             ));
         }
     }

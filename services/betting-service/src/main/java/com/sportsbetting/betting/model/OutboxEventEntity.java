@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "outbox_events")
+@Table(schema = "betting", name = "outbox_events")
 public class OutboxEventEntity {
 
     @Id

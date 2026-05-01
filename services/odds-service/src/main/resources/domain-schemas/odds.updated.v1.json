@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "odds.updated.v1",
+  "description": "Outbound validation schema for odds-service. Validates every payload before it enters the outbox. updatedAt is required here (producer always sets it) but only optional in the shared consumer-facing contract until all consumers are deployed.",
+  "type": "object",
+  "required": ["eventId", "selection", "odds", "updatedAt"],
+  "properties": {
+    "eventId":   { "type": "string",  "minLength": 1 },
+    "selection": { "type": "string",  "minLength": 1 },
+    "odds":      { "type": "number",  "exclusiveMinimum": 0 },
+    "updatedAt": { "type": "string",  "format": "date-time" }
+  }
+}

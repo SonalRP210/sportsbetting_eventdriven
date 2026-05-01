@@ -57,7 +57,7 @@ class OddsControllerTest {
         mockMvc.perform(get("/api/v1/internal/outbox"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.events.length()", is(1)))
-                .andExpect(jsonPath("$.events[0].type", is("odds.odds.updated.v1")));
+                .andExpect(jsonPath("$.events[0].type", is("odds.updated.v1")));
     }
 
     @Test

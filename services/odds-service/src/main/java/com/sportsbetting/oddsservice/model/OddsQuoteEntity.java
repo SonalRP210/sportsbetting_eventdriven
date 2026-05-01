@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "odds_quotes")
+@Table(schema = "odds", name = "odds_quotes")
 public class OddsQuoteEntity {
 
     @Id
