@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["eventId", "winningSelection", "releases"],
+  "properties": {
+    "eventId": { "type": "string" },
+    "winningSelection": { "type": "string" },
+    "releases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["userId", "openRisk"],
+        "properties": {
+          "userId": { "type": "string" },
+          "openRisk": { "type": "number" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["betId", "userId", "eventId", "selection", "stake", "odds", "openRisk"],
+  "properties": {
+    "betId": { "type": "string" },
+    "userId": { "type": "string" },
+    "eventId": { "type": "string" },
+    "selection": { "type": "string" },
+    "stake": { "type": "number" },
+    "odds": { "type": "number" },
+    "openRisk": { "type": "number" }
+  }
+}

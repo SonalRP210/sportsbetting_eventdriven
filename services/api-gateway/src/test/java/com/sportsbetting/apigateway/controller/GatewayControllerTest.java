@@ -14,4 +14,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class GatewayControllerTest {
  @Autowired MockMvc mvc;
  @Test void healthEndpointWorks() throws Exception { mvc.perform(get("/api/v1/gateway/health")).andExpect(status().isOk()); }
+
+ @Test void monolithStyleHealthWorks() throws Exception { mvc.perform(get("/api/v1/health")).andExpect(status().isOk()); }
 }

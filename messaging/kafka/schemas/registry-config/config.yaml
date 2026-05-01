@@ -1,0 +1,6 @@
+registry:
+  mode: "confluent-compatible"
+  compatibility: "BACKWARD"
+  # Local Docker Compose: http://localhost:18081 (see infra/local/docker-compose.yml schema-registry)
+  url: "${SCHEMA_REGISTRY_URL:http://localhost:18081}"
+  note: "JSON/Avro artifacts can be registered here; services use JSON Schema validation from event-support for outbound payloads when app.kafka.schema-validation.enabled=true"

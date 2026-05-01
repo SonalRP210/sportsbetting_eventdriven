@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["walletId", "userId", "amount", "currency", "transactionId", "type"],
+  "properties": {
+    "walletId": { "type": "string" },
+    "userId": { "type": "string" },
+    "amount": { "type": "number" },
+    "currency": { "type": "string" },
+    "transactionId": { "type": "string" },
+    "type": { "type": "string" }
+  }
+}

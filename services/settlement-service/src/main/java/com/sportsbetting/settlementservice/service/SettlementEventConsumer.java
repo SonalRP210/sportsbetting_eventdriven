@@ -1,0 +1,103 @@
+package com.sportsbetting.settlementservice.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sportsbetting.settlementservice.model.ProcessedEventEntity;
+import com.sportsbetting.settlementservice.repository.ProcessedEventRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.Map;
+
+@Component
+@ConditionalOnProperty(name = "app.kafka.consumers.enabled", havingValue = "true", matchIfMissing = true)
+public class SettlementEventConsumer {
+    private final SettlementService settlementService;
+    private final ProcessedEventRepository processedEventRepository;
+    private final ObjectMapper objectMapper;
+
+    public SettlementEventConsumer(
+            SettlementService settlementService,
+            ProcessedEventRepository processedEventRepository,
+            ObjectMapper objectMapper
+    ) {
+        this.settlementService = settlementService;
+        this.processedEventRepository = processedEventRepository;
+        this.objectMapper = objectMapper;
+    }
+
+    @KafkaListener(topics = "${app.kafka.topic.betPlaced:betting.bet.placed.v1}", groupId = "${app.kafka.group.settlement:settlement-service}")
+    @Transactional
+    public void onBetPlaced(String payload, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        processOnce(topic, payload, () -> {
+            Map<String, Object> data = read(payload);
+            settlementService.onBetPlaced(
+                    asString(data.get("betId")),
+                    asString(data.get("userId")),
+                    asString(data.get("eventId")),
+                    asString(data.get("selection")),
+                    asDecimal(data.get("stake")),
+                    asDecimal(data.get("odds"))
+            );
+        });
+    }
+
+    @KafkaListener(topics = "${app.kafka.topic.betCancelled:betting.bet.cancelled.v1}", groupId = "${app.kafka.group.settlement:settlement-service}")
+    @Transactional
+    public void onBetCancelled(String payload, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        processOnce(topic, payload, () -> {
+            Map<String, Object> data = read(payload);
+            settlementService.onBetCancelled(asString(data.get("betId")));
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> read(String payload) {
+        try {
+            return objectMapper.readValue(payload, Map.class);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Invalid kafka payload", ex);
+        }
+    }
+
+    private String asString(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private BigDecimal asDecimal(Object value) {
+        return value == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(value));
+    }
+
+    private void processOnce(String topic, String payload, Runnable handler) {
+        String eventKey = topic + ":" + sha256(payload);
+        if (processedEventRepository.existsById(eventKey)) {
+            return;
+        }
+        handler.run();
+        ProcessedEventEntity processed = new ProcessedEventEntity();
+        processed.setEventKey(eventKey);
+        processed.setProcessedAt(Instant.now());
+        processedEventRepository.save(processed);
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to hash payload", ex);
+        }
+    }
+}

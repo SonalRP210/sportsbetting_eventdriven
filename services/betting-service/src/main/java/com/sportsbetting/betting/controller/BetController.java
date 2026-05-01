@@ -4,18 +4,14 @@ import com.sportsbetting.betting.dto.BetDetailResponse;
 import com.sportsbetting.betting.dto.CancelBetResponse;
 import com.sportsbetting.betting.dto.PlaceBetRequest;
 import com.sportsbetting.betting.dto.PlaceBetResponse;
+import com.sportsbetting.betting.dto.UserBetSummaryResponse;
 import com.sportsbetting.betting.model.DomainEvent;
 import com.sportsbetting.betting.service.BettingService;
+import com.sportsbetting.betting.service.OutboxDispatcher;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -26,20 +22,18 @@ import java.util.Map;
 public class BetController {
 
     private final BettingService bettingService;
+    private final OutboxDispatcher outboxDispatcher;
 
-    public BetController(BettingService bettingService) {
+    public BetController(BettingService bettingService, OutboxDispatcher outboxDispatcher) {
         this.bettingService = bettingService;
+        this.outboxDispatcher = outboxDispatcher;
     }
 
     @PostMapping("/bets")
     public ResponseEntity<PlaceBetResponse> placeBet(
             @Valid @RequestBody PlaceBetRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
-        try {
-            return ResponseEntity.status(HttpStatus.CREATED).body(bettingService.placeBet(request, idempotencyKey));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().build();
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(bettingService.placeBet(request, idempotencyKey));
     }
 
     @GetMapping("/bets/{betId}")
@@ -49,16 +43,25 @@ public class BetController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/users/{userId}/bets")
+    public ResponseEntity<List<UserBetSummaryResponse>> userBets(
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(bettingService.getUserBets(userId, page, size));
+    }
+
+    @GetMapping("/events/{eventId}/bets")
+    public ResponseEntity<List<UserBetSummaryResponse>> eventBets(
+            @PathVariable String eventId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(bettingService.getEventBets(eventId, page, size));
+    }
+
     @PostMapping("/bets/{betId}/cancel")
     public ResponseEntity<CancelBetResponse> cancelBet(@PathVariable String betId) {
-        try {
-            return ResponseEntity.ok(bettingService.cancelBet(betId));
-        } catch (IllegalArgumentException ex) {
-            if ("Bet not found".equals(ex.getMessage())) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.badRequest().build();
-        }
+        return ResponseEntity.ok(bettingService.cancelBet(betId));
     }
 
     @PostMapping("/internal/odds")
@@ -78,8 +81,8 @@ public class BetController {
         return ResponseEntity.ok(Map.of("events", bettingService.outboxEvents()));
     }
 
-    @GetMapping("/ping")
-    public ResponseEntity<Map<String, String>> ping() {
-        return ResponseEntity.ok(Map.of("message", "betting-service pong"));
+    @PostMapping("/internal/outbox/dispatch")
+    public ResponseEntity<Map<String, Integer>> dispatchOutbox() {
+        return ResponseEntity.ok(Map.of("published", outboxDispatcher.dispatchPending()));
     }
 }

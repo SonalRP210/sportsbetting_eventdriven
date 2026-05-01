@@ -3,6 +3,7 @@ package com.sportsbetting.oddsservice.controller;
 import com.sportsbetting.oddsservice.model.DomainEvent;
 import com.sportsbetting.oddsservice.model.OddsUpdate;
 import com.sportsbetting.oddsservice.service.OddsService;
+import com.sportsbetting.oddsservice.service.OutboxDispatcher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,9 +22,11 @@ import java.util.Map;
 public class OddsController {
 
     private final OddsService oddsService;
+    private final OutboxDispatcher outboxDispatcher;
 
-    public OddsController(OddsService oddsService) {
+    public OddsController(OddsService oddsService, OutboxDispatcher outboxDispatcher) {
         this.oddsService = oddsService;
+        this.outboxDispatcher = outboxDispatcher;
     }
 
     @PostMapping("/odds-feed")
@@ -50,6 +53,12 @@ public class OddsController {
     @GetMapping("/internal/outbox")
     public ResponseEntity<Map<String, List<DomainEvent>>> outbox() {
         return ResponseEntity.ok(Map.of("events", oddsService.outboxEvents()));
+    }
+
+    @PostMapping("/internal/outbox/dispatch")
+    public ResponseEntity<Map<String, Object>> dispatchOutbox() {
+        int sent = outboxDispatcher.dispatchPending();
+        return ResponseEntity.ok(Map.of("dispatched", sent));
     }
 
     @PostMapping("/internal/seed-odds")

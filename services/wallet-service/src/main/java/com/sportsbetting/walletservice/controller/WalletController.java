@@ -5,6 +5,7 @@ import com.sportsbetting.walletservice.dto.WalletBalanceResponse;
 import com.sportsbetting.walletservice.dto.WalletTransactionRequest;
 import com.sportsbetting.walletservice.model.DomainEvent;
 import com.sportsbetting.walletservice.model.WalletTransaction;
+import com.sportsbetting.walletservice.service.OutboxDispatcher;
 import com.sportsbetting.walletservice.service.WalletService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -24,9 +25,11 @@ import java.util.Map;
 public class WalletController {
 
     private final WalletService walletService;
+    private final OutboxDispatcher outboxDispatcher;
 
-    public WalletController(WalletService walletService) {
+    public WalletController(WalletService walletService, OutboxDispatcher outboxDispatcher) {
         this.walletService = walletService;
+        this.outboxDispatcher = outboxDispatcher;
     }
 
     @PostMapping("/wallet/transactions")
@@ -53,5 +56,11 @@ public class WalletController {
     @GetMapping("/internal/outbox")
     public ResponseEntity<Map<String, List<DomainEvent>>> outbox() {
         return ResponseEntity.ok(Map.of("events", walletService.outboxEvents()));
+    }
+
+    @PostMapping("/internal/outbox/dispatch")
+    public ResponseEntity<Map<String, Object>> dispatchOutbox() {
+        int sent = outboxDispatcher.dispatchPending();
+        return ResponseEntity.ok(Map.of("dispatched", sent));
     }
 }

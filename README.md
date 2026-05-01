@@ -12,6 +12,7 @@ Event-driven microservice platform for sports betting (Java/Spring Boot).
 ## Service Ports
 
 - `postgres`: `5433` (container port `5432`)
+- `kafka/redpanda`: `19092` (container port `9092`)
 - `api-gateway`: `8070` (container port `8080`)
 - `auth-service`: `8081`
 - `user-service`: `8082`
@@ -22,4 +23,10 @@ Event-driven microservice platform for sports betting (Java/Spring Boot).
 - `settlement-service`: `8087`
 - `notification-service`: `8088`
 - `risk-service`: `8089`
+
+## Event Platform Notes
+
+- Kafka topics are created at startup by `infra/local/kafka/init-topics.sh`.
+- Topic catalog lives in `messaging/kafka/topics/topic-definitions.yaml`.
+- Base Postgres schemas are initialized from `data/postgres/scripts/init-schemas.sql`.
 

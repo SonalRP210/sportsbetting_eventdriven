@@ -2,89 +2,267 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: sb-postgres
+    restart: unless-stopped
     ports:
       - "5433:5432"
     environment:
       POSTGRES_DB: sportsbetting
       POSTGRES_USER: sportsbetting
       POSTGRES_PASSWORD: sportsbetting
+    volumes:
+      - ../../data/postgres/scripts/init-schemas.sql:/docker-entrypoint-initdb.d/01-init-schemas.sql:ro
+      - ../../data/postgres/scripts/grants.sql:/docker-entrypoint-initdb.d/02-grants.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sportsbetting -d sportsbetting"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redpanda:
+    image: redpandadata/redpanda:v24.1.6
+    container_name: sb-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --reserve-memory
+      - "0M"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092
+    ports:
+      - "19092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk topic list --brokers localhost:9092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.5
+    container_name: sb-schema-registry
+    restart: unless-stopped
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "18081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: redpanda:9092
+
+  kafka-init:
+    image: redpandadata/redpanda:v24.1.6
+    container_name: sb-kafka-init
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    volumes:
+      - ./kafka/init-topics.sh:/init-topics.sh:ro
+    entrypoint: ["/bin/bash", "/init-topics.sh"]
 
   api-gateway:
-    build:
-      context: ../../services/api-gateway
+    build: { context: ../../services/api-gateway }
     container_name: sb-api-gateway
-    ports:
-      - "8070:8080"
+    restart: unless-stopped
+    ports: ["8070:8080"]
+    environment: &common_env
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/sportsbetting
+      SPRING_DATASOURCE_USERNAME: sportsbetting
+      SPRING_DATASOURCE_PASSWORD: sportsbetting
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      APP_KAFKA_CONSUMER_MAX_ATTEMPTS: 3
+      APP_KAFKA_CONSUMER_BACKOFF_MS: 1000
+      APP_KAFKA_DLT_SUFFIX: .dlq
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      APP_KAFKA_SCHEMA_VALIDATION_ENABLED: "false"
     depends_on:
-      - auth-service
-      - user-service
-      - betting-service
-      - wallet-service
-      - odds-service
-      - event-ingestion-service
-      - settlement-service
-      - notification-service
-      - risk-service
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      betting-service:
+        condition: service_started
+      wallet-service:
+        condition: service_started
+      odds-service:
+        condition: service_started
+      event-ingestion-service:
+        condition: service_started
+      settlement-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      risk-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
 
   auth-service:
-    build:
-      context: ../../services/auth-service
+    build: { context: ../../services/auth-service }
     container_name: sb-auth-service
-    ports:
-      - "8081:8080"
+    restart: unless-stopped
+    ports: ["8081:8080"]
+    environment: *common_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/auth/login >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   user-service:
-    build:
-      context: ../../services/user-service
+    build: { context: ../../services/user-service }
     container_name: sb-user-service
-    ports:
-      - "8082:8080"
+    restart: unless-stopped
+    ports: ["8082:8080"]
+    environment: *common_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/users/user-1 >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   wallet-service:
-    build:
-      context: ../../services/wallet-service
+    build: { context: ../../services/wallet-service }
     container_name: sb-wallet-service
-    ports:
-      - "8083:8080"
+    restart: unless-stopped
+    ports: ["8083:8080"]
+    environment: *common_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/wallet/user-1/balance >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   betting-service:
-    build:
-      context: ../../services/betting-service
+    build: { context: ../../services/betting-service }
     container_name: sb-betting-service
-    ports:
-      - "8094:8084"
+    restart: unless-stopped
+    ports: ["8094:8084"]
+    environment: *common_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/api/v1/ping >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   odds-service:
-    build:
-      context: ../../services/odds-service
+    build: { context: ../../services/odds-service }
     container_name: sb-odds-service
-    ports:
-      - "8085:8080"
+    restart: unless-stopped
+    ports: ["8085:8080"]
+    environment: *common_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/odds/event-001/HOME >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   event-ingestion-service:
-    build:
-      context: ../../services/event-ingestion-service
+    build: { context: ../../services/event-ingestion-service }
     container_name: sb-event-ingestion-service
-    ports:
-      - "8086:8080"
+    restart: unless-stopped
+    ports: ["8086:8080"]
+    environment: *common_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/internal/normalized-events >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   settlement-service:
-    build:
-      context: ../../services/settlement-service
+    build: { context: ../../services/settlement-service }
     container_name: sb-settlement-service
-    ports:
-      - "8087:8080"
+    restart: unless-stopped
+    ports: ["8087:8080"]
+    environment: *common_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/internal/outbox >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   notification-service:
-    build:
-      context: ../../services/notification-service
+    build: { context: ../../services/notification-service }
     container_name: sb-notification-service
-    ports:
-      - "8088:8080"
+    restart: unless-stopped
+    ports: ["8088:8080"]
+    environment: *common_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/internal/deliveries >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   risk-service:
-    build:
-      context: ../../services/risk-service
+    build: { context: ../../services/risk-service }
     container_name: sb-risk-service
-    ports:
-      - "8089:8080"
+    restart: unless-stopped
+    ports: ["8089:8080"]
+    environment: *common_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/risk/total >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10

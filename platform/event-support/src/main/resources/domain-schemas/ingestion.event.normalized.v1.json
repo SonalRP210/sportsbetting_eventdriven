@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["provider", "eventType", "payload", "normalizedAt"],
+  "properties": {
+    "provider": { "type": "string" },
+    "eventType": { "type": "string" },
+    "payload": true,
+    "normalizedAt": { "type": "string" }
+  }
+}

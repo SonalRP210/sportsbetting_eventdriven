@@ -1,0 +1,9 @@
+dlqTopics:
+  - betting.bet.placed.v1.dlq
+  - betting.bet.cancelled.v1.dlq
+  - odds.odds.updated.v1.dlq
+  - settlement.event.settled.v1.dlq
+  - wallet.wallet.credited.v1.dlq
+  - wallet.wallet.debited.v1.dlq
+  - risk.exposure.updated.v1.dlq
+  - notification.events.v1.dlq

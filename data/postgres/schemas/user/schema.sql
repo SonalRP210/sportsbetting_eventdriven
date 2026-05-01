@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS app_user.profiles (
+  user_id VARCHAR(64) PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

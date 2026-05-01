@@ -1,136 +1,215 @@
 package com.sportsbetting.betting.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportsbetting.betting.dto.BetDetailResponse;
 import com.sportsbetting.betting.dto.CancelBetResponse;
 import com.sportsbetting.betting.dto.PlaceBetRequest;
 import com.sportsbetting.betting.dto.PlaceBetResponse;
-import com.sportsbetting.betting.model.Bet;
+import com.sportsbetting.betting.dto.UserBetSummaryResponse;
+import com.sportsbetting.betting.model.BetEntity;
 import com.sportsbetting.betting.model.BetStatus;
 import com.sportsbetting.betting.model.DomainEvent;
+import com.sportsbetting.betting.model.OddsQuoteEntity;
+import com.sportsbetting.betting.model.OutboxEventEntity;
+import com.sportsbetting.betting.repository.BetRepository;
+import com.sportsbetting.betting.repository.OddsQuoteRepository;
+import com.sportsbetting.betting.repository.OutboxEventRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class BettingService {
 
     private static final String BET_PREFIX = "BET-";
 
-    private final Map<String, Bet> betStore = new ConcurrentHashMap<>();
-    private final Map<String, String> idempotencyIndex = new ConcurrentHashMap<>();
-    private final Map<String, BigDecimal> oddsStore = new ConcurrentHashMap<>();
-    private final List<DomainEvent> outbox = new ArrayList<>();
+    private final BetRepository betRepository;
+    private final OddsQuoteRepository oddsQuoteRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
-    public BettingService() {
-        oddsStore.put(oddsKey("event-001", "HOME"), new BigDecimal("1.90"));
-        oddsStore.put(oddsKey("event-001", "AWAY"), new BigDecimal("2.10"));
+    public BettingService(
+            BetRepository betRepository,
+            OddsQuoteRepository oddsQuoteRepository,
+            OutboxEventRepository outboxEventRepository,
+            ObjectMapper objectMapper) {
+        this.betRepository = betRepository;
+        this.oddsQuoteRepository = oddsQuoteRepository;
+        this.outboxEventRepository = outboxEventRepository;
+        this.objectMapper = objectMapper;
     }
 
+    @Transactional
     public void setOdds(String eventId, String selection, BigDecimal odds) {
         if (odds == null || odds.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Odds must be greater than zero");
         }
-        oddsStore.put(oddsKey(eventId, selection), money(odds));
+        String key = oddsKey(eventId, selection);
+        OddsQuoteEntity quote = oddsQuoteRepository.findById(key).orElseGet(OddsQuoteEntity::new);
+        quote.setKeyId(key);
+        quote.setOddsKey(key);
+        quote.setEventId(eventId);
+        quote.setSelection(selection);
+        quote.setOdds(money(odds));
+        quote.setUpdatedAt(Instant.now());
+        oddsQuoteRepository.save(quote);
     }
 
+    @Transactional
     public PlaceBetResponse placeBet(PlaceBetRequest request, String idempotencyKey) {
         String normalizedKey = normalizeIdempotencyKey(idempotencyKey);
         if (normalizedKey != null) {
-            String replayBetId = idempotencyIndex.get(request.userId() + "::" + normalizedKey);
-            if (replayBetId != null) {
-                Bet existing = betStore.get(replayBetId);
-                return new PlaceBetResponse(existing.betId(), existing.odds(), existing.status().name());
+            Optional<BetEntity> replay = betRepository.findByUserIdAndIdempotencyKey(request.userId(), normalizedKey);
+            if (replay.isPresent()) {
+                BetEntity existing = replay.get();
+                return new PlaceBetResponse(existing.getBetId(), existing.getOdds(), existing.getStatus().name());
             }
         }
 
-        BigDecimal odds = oddsStore.get(oddsKey(request.eventId(), request.selection()));
-        if (odds == null) {
-            throw new IllegalArgumentException("No active odds found for event/selection");
-        }
+        BigDecimal odds = oddsQuoteRepository.findById(oddsKey(request.eventId(), request.selection()))
+                .map(OddsQuoteEntity::getOdds)
+                .orElseThrow(() -> new IllegalArgumentException("No active odds found for event/selection"));
 
-        Bet bet = new Bet(
-                BET_PREFIX + UUID.randomUUID(),
-                request.userId(),
-                request.eventId(),
-                request.selection(),
-                money(request.stake()),
-                money(odds),
-                BetStatus.OPEN,
-                normalizedKey
-        );
+        BetEntity bet = new BetEntity();
+        bet.setBetId(BET_PREFIX + UUID.randomUUID());
+        bet.setUserId(request.userId());
+        bet.setEventId(request.eventId());
+        bet.setSelection(request.selection());
+        bet.setStake(money(request.stake()));
+        bet.setOdds(money(odds));
+        bet.setStatus(BetStatus.OPEN);
+        bet.setIdempotencyKey(normalizedKey);
+        betRepository.save(bet);
 
-        betStore.put(bet.betId(), bet);
-        if (normalizedKey != null) {
-            idempotencyIndex.put(request.userId() + "::" + normalizedKey, bet.betId());
-        }
-
-        BigDecimal openRisk = money(bet.stake().multiply(bet.odds()));
-        outbox.add(new DomainEvent("betting.bet.placed.v1", Map.of(
-                "betId", bet.betId(),
-                "userId", bet.userId(),
-                "eventId", bet.eventId(),
-                "selection", bet.selection(),
-                "stake", bet.stake(),
-                "odds", bet.odds(),
+        BigDecimal openRisk = money(bet.getStake().multiply(bet.getOdds()));
+        persistOutbox("betting.bet.placed.v1", Map.of(
+                "betId", bet.getBetId(),
+                "userId", bet.getUserId(),
+                "eventId", bet.getEventId(),
+                "selection", bet.getSelection(),
+                "stake", bet.getStake(),
+                "odds", bet.getOdds(),
                 "openRisk", openRisk
-        )));
-
-        return new PlaceBetResponse(bet.betId(), bet.odds(), bet.status().name());
-    }
-
-    public Optional<BetDetailResponse> getBetById(String betId) {
-        Bet bet = betStore.get(betId);
-        if (bet == null) {
-            return Optional.empty();
-        }
-        return Optional.of(new BetDetailResponse(
-                bet.betId(),
-                bet.userId(),
-                bet.eventId(),
-                bet.selection(),
-                bet.stake(),
-                bet.odds(),
-                bet.status().name()
         ));
+
+        return new PlaceBetResponse(bet.getBetId(), bet.getOdds(), bet.getStatus().name());
     }
 
+    @Transactional(readOnly = true)
+    public Optional<BetDetailResponse> getBetById(String betId) {
+        return betRepository.findById(betId)
+                .map(b -> new BetDetailResponse(
+                        b.getBetId(),
+                        b.getUserId(),
+                        b.getEventId(),
+                        b.getSelection(),
+                        b.getStake(),
+                        b.getOdds(),
+                        b.getStatus().name()
+                ));
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserBetSummaryResponse> getUserBets(String userId, int page, int size) {
+        return slice(betRepository.findByUserIdOrderByBetIdAsc(userId), page, size).stream()
+                .map(this::toSummary)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserBetSummaryResponse> getEventBets(String eventId, int page, int size) {
+        return slice(betRepository.findByEventIdOrderByBetIdAsc(eventId), page, size).stream()
+                .map(this::toSummary)
+                .toList();
+    }
+
+    @Transactional
     public CancelBetResponse cancelBet(String betId) {
-        Bet bet = betStore.get(betId);
-        if (bet == null) {
-            throw new IllegalArgumentException("Bet not found");
-        }
-        if (bet.status() != BetStatus.OPEN) {
+        BetEntity bet = betRepository.findById(betId)
+                .orElseThrow(() -> new IllegalArgumentException("Bet not found"));
+
+        if (bet.getStatus() != BetStatus.OPEN) {
             throw new IllegalArgumentException("Only OPEN bets can be cancelled");
         }
 
-        Bet cancelled = bet.withStatus(BetStatus.CANCELLED);
-        betStore.put(cancelled.betId(), cancelled);
+        bet.setStatus(BetStatus.CANCELLED);
+        betRepository.save(bet);
 
-        BigDecimal openRisk = money(cancelled.stake().multiply(cancelled.odds()));
-        outbox.add(new DomainEvent("betting.bet.cancelled.v1", Map.of(
-                "betId", cancelled.betId(),
-                "userId", cancelled.userId(),
+        BigDecimal openRisk = money(bet.getStake().multiply(bet.getOdds()));
+        persistOutbox("betting.bet.cancelled.v1", Map.of(
+                "betId", bet.getBetId(),
+                "userId", bet.getUserId(),
                 "openRisk", openRisk
-        )));
+        ));
 
-        return new CancelBetResponse(cancelled.betId(), cancelled.status().name(), "Bet cancelled");
+        return new CancelBetResponse(bet.getBetId(), bet.getStatus().name(), "Bet cancelled");
     }
 
+    @Transactional(readOnly = true)
     public List<DomainEvent> outboxEvents() {
-        return List.copyOf(outbox);
+        return outboxEventRepository.findAll().stream().map(this::toDomainEvent).toList();
     }
 
+    @Transactional
     public void resetForTests() {
-        betStore.clear();
-        idempotencyIndex.clear();
-        outbox.clear();
+        betRepository.deleteAll();
+        outboxEventRepository.deleteAll();
+        oddsQuoteRepository.deleteAll();
+        setOdds("event-001", "HOME", new BigDecimal("1.90"));
+        setOdds("event-001", "AWAY", new BigDecimal("2.10"));
+    }
+
+    private UserBetSummaryResponse toSummary(BetEntity bet) {
+        return new UserBetSummaryResponse(bet.getBetId(), bet.getEventId(), bet.getStake(), bet.getOdds(), bet.getStatus().name());
+    }
+
+    private List<BetEntity> slice(List<BetEntity> input, int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(size, 1);
+        int from = safePage * safeSize;
+        if (from >= input.size()) {
+            return List.of();
+        }
+        int to = Math.min(from + safeSize, input.size());
+        return input.subList(from, to);
+    }
+
+    private void persistOutbox(String eventType, Map<String, Object> payload) {
+        OutboxEventEntity row = new OutboxEventEntity();
+        row.setId(UUID.randomUUID());
+        row.setEventType(eventType);
+        row.setPayload(writeJson(payload));
+        row.setPublished(false);
+        row.setCreatedAt(Instant.now());
+        outboxEventRepository.save(row);
+    }
+
+    private DomainEvent toDomainEvent(OutboxEventEntity e) {
+        return new DomainEvent(e.getEventType(), readJson(e.getPayload()));
+    }
+
+    private Object readJson(String payload) {
+        try {
+            return objectMapper.readValue(payload, Object.class);
+        } catch (JsonProcessingException ex) {
+            return payload;
+        }
+    }
+
+    private String writeJson(Map<String, Object> payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize outbox payload", ex);
+        }
     }
 
     private String normalizeIdempotencyKey(String idempotencyKey) {
