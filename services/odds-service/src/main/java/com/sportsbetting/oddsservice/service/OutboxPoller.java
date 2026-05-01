@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(name = "app.outbox.poll.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "app.outbox.poll.enabled", havingValue = "true", matchIfMissing = false)
 public class OutboxPoller {
     private static final Logger log = LoggerFactory.getLogger(OutboxPoller.class);
     private final OutboxDispatcher outboxDispatcher;
