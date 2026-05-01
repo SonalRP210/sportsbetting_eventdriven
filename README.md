@@ -73,4 +73,3 @@ Event-driven microservice platform for sports betting (Java/Spring Boot).
   - security: `scripts/security/owasp-dependency-check.sh`
 - CI matrix:
   - `.github/workflows/test-matrix.yml` (`unit`, `integration`, `e2e`, `non-functional`)
-
