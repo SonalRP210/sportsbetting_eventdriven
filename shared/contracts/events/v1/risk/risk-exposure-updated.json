@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "risk.exposure.updated.v1",
+  "description": "Published by risk-service when liability exposure is recalculated for an event/selection after a bet is placed or cancelled.",
+  "type": "object",
+  "required": ["eventId", "selection", "totalStake", "totalLiability", "updatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId":        { "type": "string", "minLength": 1 },
+    "selection":      { "type": "string", "minLength": 1 },
+    "totalStake":     { "type": "number", "minimum": 0, "description": "Aggregate stake across all open bets for this selection" },
+    "totalLiability": { "type": "number", "minimum": 0, "description": "Maximum payout owed if this selection wins" },
+    "updatedAt":      { "type": "string", "format": "date-time" }
+  }
+}
