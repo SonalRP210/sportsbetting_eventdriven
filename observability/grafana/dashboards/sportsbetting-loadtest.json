@@ -23,28 +23,28 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "k6 Request Rate",
+      "title": "HTTP Request Rate",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
-      "targets": [{ "refId": "A", "expr": "sum(rate(k6_http_reqs_total[2m]))", "legendFormat": "k6 req/s" }],
+      "targets": [{ "refId": "A", "expr": "sum(rate(http_server_requests_seconds_count[2m]))", "legendFormat": "req/s" }],
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
     },
     {
       "id": 2,
       "type": "timeseries",
-      "title": "k6 Failed Request Rate",
+      "title": "HTTP 5xx Rate",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
-      "targets": [{ "refId": "A", "expr": "avg(last_over_time(k6_http_req_failed_rate[2m])) * 100", "legendFormat": "failed %" }],
+      "targets": [{ "refId": "A", "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[2m])) / clamp_min(sum(rate(http_server_requests_seconds_count[2m])), 1) * 100", "legendFormat": "5xx %" }],
       "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }
     },
     {
       "id": 3,
       "type": "timeseries",
-      "title": "k6 HTTP P95 Duration",
+      "title": "HTTP P95 Duration",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
-      "targets": [{ "refId": "A", "expr": "avg(last_over_time(k6_http_req_duration_p95[2m])) * 1000", "legendFormat": "p95 ms" }],
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[2m])) by (le)) * 1000", "legendFormat": "p95 ms" }],
       "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
     },
     {
@@ -68,55 +68,55 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Total Bets Exposure",
+      "title": "Bet Endpoint Throughput",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
-      "targets": [{ "refId": "A", "expr": "bets_exposure", "legendFormat": "exposure" }],
+      "targets": [{ "refId": "A", "expr": "sum(rate(http_server_requests_seconds_count{uri=~\".*/bets.*\"}[1m]))", "legendFormat": "bets req/s" }],
       "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] }
     },
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Rate Limit Test - 429 Rate",
+      "title": "HTTP 429 Rate",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
-      "targets": [{ "refId": "A", "expr": "avg(k6_rate_limit_errors_rate{test=\"rate_limit\"}) * 100", "legendFormat": "rate_limit 429 %" }],
+      "targets": [{ "refId": "A", "expr": "sum(rate(http_server_requests_seconds_count{status=\"429\"}[1m])) / clamp_min(sum(rate(http_server_requests_seconds_count[1m])), 1) * 100", "legendFormat": "429 %" }],
       "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }
     },
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Rate Limit Test - Duration P95",
+      "title": "Rate-Limited Requests P95",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
-      "targets": [{ "refId": "A", "expr": "avg(k6_request_duration_ms_p95{test=\"rate_limit\"})", "legendFormat": "rate_limit p95" }],
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{status=\"429\"}[1m])) by (le)) * 1000", "legendFormat": "429 p95 ms" }],
       "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
     },
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Bet Placement - Success Throughput",
+      "title": "Bet Placement Throughput",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
-      "targets": [{ "refId": "A", "expr": "sum(rate(k6_bets_placed_total{test=\"bet_placement\"}[1m]))", "legendFormat": "bets placed/s" }],
+      "targets": [{ "refId": "A", "expr": "sum(rate(http_server_requests_seconds_count{uri=~\".*/bets.*\",status=~\"2..\"}[1m]))", "legendFormat": "2xx bets/s" }],
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
     },
     {
       "id": 10,
       "type": "timeseries",
-      "title": "Bet Placement - Idempotent Replays",
+      "title": "Bet Placement 4xx Rate",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
-      "targets": [{ "refId": "A", "expr": "sum(rate(k6_idempotent_replays_total{test=\"bet_placement\"}[1m]))", "legendFormat": "idempotent replay/s" }],
+      "targets": [{ "refId": "A", "expr": "sum(rate(http_server_requests_seconds_count{uri=~\".*/bets.*\",status=~\"4..\"}[1m]))", "legendFormat": "4xx bets/s" }],
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
     },
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Bet Placement - P95 Duration",
+      "title": "Bet Placement P95 Duration",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
-      "targets": [{ "refId": "A", "expr": "avg(k6_bet_placement_duration_ms_p95{test=\"bet_placement\"})", "legendFormat": "bet placement p95" }],
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri=~\".*/bets.*\"}[1m])) by (le)) * 1000", "legendFormat": "bets p95 ms" }],
       "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
     },
     {
@@ -125,7 +125,7 @@
       "title": "Odds Feed - Processed Events",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
-      "targets": [{ "refId": "A", "expr": "sum(rate(odds_feed_events_processed_total[1m]))", "legendFormat": "events/s" }],
+      "targets": [{ "refId": "A", "expr": "sum(rate(http_server_requests_seconds_count{uri=~\".*/odds.*\"}[1m]))", "legendFormat": "odds req/s" }],
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
     },
     {

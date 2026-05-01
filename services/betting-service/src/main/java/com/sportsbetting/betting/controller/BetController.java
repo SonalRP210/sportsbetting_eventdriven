@@ -8,6 +8,7 @@ import com.sportsbetting.betting.dto.UserBetSummaryResponse;
 import com.sportsbetting.betting.model.DomainEvent;
 import com.sportsbetting.betting.service.BettingService;
 import com.sportsbetting.betting.service.OutboxDispatcher;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1")
+@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-injected service references")
 public class BetController {
+
+    @GetMapping("/ping")
+    public ResponseEntity<Map<String, String>> ping() {
+        return ResponseEntity.ok(Map.of("status", "ok"));
+    }
 
     private final BettingService bettingService;
     private final OutboxDispatcher outboxDispatcher;
@@ -86,3 +93,7 @@ public class BetController {
         return ResponseEntity.ok(Map.of("published", outboxDispatcher.dispatchPending()));
     }
 }
+
+
+
+

@@ -32,7 +32,8 @@ public class EventPayloadValidator {
     private final Map<String, Optional<JsonSchema>> cache = new ConcurrentHashMap<>();
 
     public EventPayloadValidator(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+        // Own copy so we do not retain a mutable reference to the caller's mapper (SpotBugs EI_EXPOSE_REP2).
+        this.objectMapper = objectMapper.copy();
     }
 
     public void validateIfPresent(String eventType, String payload) {

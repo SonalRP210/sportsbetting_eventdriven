@@ -3,6 +3,7 @@ package com.sportsbetting.betting.service;
 import com.sportsbetting.betting.model.OutboxEventEntity;
 import com.sportsbetting.betting.repository.OutboxEventRepository;
 import com.sportsbetting.platform.messaging.EventPayloadValidator;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 
 @Service
+@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-injected collaborators")
 public class OutboxDispatcher {
 
     private final OutboxEventRepository outboxEventRepository;
@@ -41,3 +43,5 @@ public class OutboxDispatcher {
         return sent;
     }
 }
+
+

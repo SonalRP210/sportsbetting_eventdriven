@@ -1,5 +1,6 @@
 package com.sportsbetting.apigateway.service;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -13,6 +14,7 @@ import java.time.Instant;
 import java.util.Map;
 
 @Service
+@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-injected RestClient singleton")
 public class GatewayService {
     private final RestClient restClient;
     private final String applicationName;
@@ -26,6 +28,7 @@ public class GatewayService {
     private final String oddsBaseUrl;
 
     public GatewayService(
+            RestClient gatewayRestClient,
             @Value("${spring.application.name:api-gateway}") String applicationName,
             @Value("${gateway.routes.betting:http://betting-service:8084}") String bettingBaseUrl,
             @Value("${gateway.routes.risk:http://risk-service:8080}") String riskBaseUrl,
@@ -36,7 +39,7 @@ public class GatewayService {
             @Value("${gateway.routes.settlement:http://settlement-service:8080}") String settlementBaseUrl,
             @Value("${gateway.routes.odds:http://odds-service:8080}") String oddsBaseUrl
     ) {
-        this.restClient = RestClient.create();
+        this.restClient = gatewayRestClient;
         this.applicationName = applicationName;
         this.bettingBaseUrl = bettingBaseUrl;
         this.riskBaseUrl = riskBaseUrl;

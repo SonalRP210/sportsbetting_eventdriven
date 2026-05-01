@@ -3,6 +3,7 @@ package com.sportsbetting.betting.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportsbetting.betting.model.ProcessedEventEntity;
 import com.sportsbetting.betting.repository.ProcessedEventRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -18,6 +19,7 @@ import java.util.Map;
 
 @Component
 @ConditionalOnProperty(name = "app.kafka.consumers.enabled", havingValue = "true", matchIfMissing = true)
+@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-injected collaborators")
 public class OddsUpdatedEventConsumer {
 
     private final BettingService bettingService;
@@ -31,7 +33,7 @@ public class OddsUpdatedEventConsumer {
     ) {
         this.bettingService = bettingService;
         this.processedEventRepository = processedEventRepository;
-        this.objectMapper = objectMapper;
+        this.objectMapper = objectMapper.copy();
     }
 
     @KafkaListener(
@@ -93,3 +95,5 @@ public class OddsUpdatedEventConsumer {
         }
     }
 }
+
+

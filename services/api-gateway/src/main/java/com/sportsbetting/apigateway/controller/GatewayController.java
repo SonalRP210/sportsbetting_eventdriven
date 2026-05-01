@@ -1,6 +1,7 @@
 package com.sportsbetting.apigateway.controller;
 
 import com.sportsbetting.apigateway.service.GatewayService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -8,6 +9,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1")
+@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-injected singleton service reference")
 public class GatewayController {
 
     private final GatewayService service;

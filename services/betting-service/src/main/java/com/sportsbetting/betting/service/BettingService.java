@@ -15,6 +15,7 @@ import com.sportsbetting.betting.model.OutboxEventEntity;
 import com.sportsbetting.betting.repository.BetRepository;
 import com.sportsbetting.betting.repository.OddsQuoteRepository;
 import com.sportsbetting.betting.repository.OutboxEventRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
+@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-injected collaborators")
 public class BettingService {
 
     private static final String BET_PREFIX = "BET-";
@@ -44,7 +46,7 @@ public class BettingService {
         this.betRepository = betRepository;
         this.oddsQuoteRepository = oddsQuoteRepository;
         this.outboxEventRepository = outboxEventRepository;
-        this.objectMapper = objectMapper;
+        this.objectMapper = objectMapper.copy();
     }
 
     @Transactional
@@ -228,3 +230,5 @@ public class BettingService {
         return value.setScale(2, RoundingMode.HALF_UP);
     }
 }
+
+

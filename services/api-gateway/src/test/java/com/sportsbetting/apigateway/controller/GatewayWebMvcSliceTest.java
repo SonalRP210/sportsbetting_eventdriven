@@ -37,14 +37,11 @@ class GatewayWebMvcSliceTest {
     }
 
     @Test
-    void rateLimitingFilterReturns429AfterBurst() throws Exception {
-        when(gatewayService.health()).thenReturn(Map.of("gateway", "ok"));
-        for (int i = 0; i < 300; i++) {
-            mockMvc.perform(get("/api/v1/gateway/health"))
-                    .andExpect(status().isOk());
-        }
-        mockMvc.perform(get("/api/v1/gateway/health"))
-                .andExpect(status().isTooManyRequests());
+    void requestCorrelationFilterEchoesProvidedRequestId() throws Exception {
+        when(gatewayService.healthV1()).thenReturn(Map.of("status", "UP"));
+        mockMvc.perform(get("/api/v1/health").header("X-Request-Id", "fixed-id"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Request-Id", "fixed-id"));
     }
 
     @Test

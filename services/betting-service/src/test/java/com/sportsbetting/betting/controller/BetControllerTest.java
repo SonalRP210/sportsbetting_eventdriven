@@ -37,6 +37,12 @@ class BetControllerTest {
     }
 
     @Test
+    void pingEndpointReturnsOk() throws Exception {
+        mockMvc.perform(get("/api/v1/ping"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("ok")));
+    }
+    @Test
     void placeBetAndReplayIdempotencyReturnsSameBetId() throws Exception {
         String payload = objectMapper.writeValueAsString(Map.of(
                 "userId", "user-a",
@@ -118,4 +124,61 @@ class BetControllerTest {
                 .andExpect(jsonPath("$.events.length()", is(2)))
                 .andExpect(jsonPath("$.events[1].type", is("betting.bet.cancelled.v1")));
     }
+
+    @Test
+    void userBetsAndEventBetsReturnSummaries() throws Exception {
+        mockMvc.perform(post("/api/v1/internal/odds")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "eventId", "event-xyz",
+                                "selection", "DRAW",
+                                "odds", 3.0
+                        ))))
+                .andExpect(status().isAccepted());
+
+        String payload = objectMapper.writeValueAsString(Map.of(
+                "userId", "user-d",
+                "eventId", "event-xyz",
+                "selection", "DRAW",
+                "stake", 10
+        ));
+        mockMvc.perform(post("/api/v1/bets").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/users/user-d/bets").param("page", "0").param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").doesNotExist())
+                .andExpect(jsonPath("$[0].betId").exists());
+
+        mockMvc.perform(get("/api/v1/events/event-xyz/bets"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].eventId", is("event-xyz")));
+    }
+
+    @Test
+    void setOddsValidatesPayload() throws Exception {
+        mockMvc.perform(post("/api/v1/internal/odds")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/v1/internal/odds")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "eventId", "e1",
+                                "selection", "HOME",
+                                "odds", 1.9
+                        ))))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted", is(true)));
+    }
+
+    @Test
+    void dispatchOutboxReturnsCount() throws Exception {
+        mockMvc.perform(post("/api/v1/internal/outbox/dispatch"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.published").exists());
+    }
 }
+
+

@@ -69,8 +69,59 @@ services:
       - ./kafka/init-topics.sh:/init-topics.sh:ro
     entrypoint: ["/bin/bash", "/init-topics.sh"]
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: sb-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      api-gateway:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      wallet-service:
+        condition: service_started
+      betting-service:
+        condition: service_started
+      odds-service:
+        condition: service_started
+      event-ingestion-service:
+        condition: service_started
+      settlement-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      risk-service:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:11.1.5
+    container_name: sb-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ../../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+
   api-gateway:
-    build: { context: ../../services/api-gateway }
+    build: { context: ../.., dockerfile: services/api-gateway/Dockerfile }
     container_name: sb-api-gateway
     restart: unless-stopped
     ports: ["8070:8080"]
@@ -115,7 +166,7 @@ services:
       retries: 10
 
   auth-service:
-    build: { context: ../../services/auth-service }
+    build: { context: ../.., dockerfile: services/auth-service/Dockerfile }
     container_name: sb-auth-service
     restart: unless-stopped
     ports: ["8081:8080"]
@@ -132,7 +183,7 @@ services:
       retries: 10
 
   user-service:
-    build: { context: ../../services/user-service }
+    build: { context: ../.., dockerfile: services/user-service/Dockerfile }
     container_name: sb-user-service
     restart: unless-stopped
     ports: ["8082:8080"]
@@ -149,7 +200,7 @@ services:
       retries: 10
 
   wallet-service:
-    build: { context: ../../services/wallet-service }
+    build: { context: ../.., dockerfile: services/wallet-service/Dockerfile }
     container_name: sb-wallet-service
     restart: unless-stopped
     ports: ["8083:8080"]
@@ -166,7 +217,7 @@ services:
       retries: 10
 
   betting-service:
-    build: { context: ../../services/betting-service }
+    build: { context: ../.., dockerfile: services/betting-service/Dockerfile }
     container_name: sb-betting-service
     restart: unless-stopped
     ports: ["8094:8084"]
@@ -183,7 +234,7 @@ services:
       retries: 10
 
   odds-service:
-    build: { context: ../../services/odds-service }
+    build: { context: ../.., dockerfile: services/odds-service/Dockerfile }
     container_name: sb-odds-service
     restart: unless-stopped
     ports: ["8085:8080"]
@@ -200,7 +251,7 @@ services:
       retries: 10
 
   event-ingestion-service:
-    build: { context: ../../services/event-ingestion-service }
+    build: { context: ../.., dockerfile: services/event-ingestion-service/Dockerfile }
     container_name: sb-event-ingestion-service
     restart: unless-stopped
     ports: ["8086:8080"]
@@ -217,7 +268,7 @@ services:
       retries: 10
 
   settlement-service:
-    build: { context: ../../services/settlement-service }
+    build: { context: ../.., dockerfile: services/settlement-service/Dockerfile }
     container_name: sb-settlement-service
     restart: unless-stopped
     ports: ["8087:8080"]
@@ -234,7 +285,7 @@ services:
       retries: 10
 
   notification-service:
-    build: { context: ../../services/notification-service }
+    build: { context: ../.., dockerfile: services/notification-service/Dockerfile }
     container_name: sb-notification-service
     restart: unless-stopped
     ports: ["8088:8080"]
@@ -251,7 +302,7 @@ services:
       retries: 10
 
   risk-service:
-    build: { context: ../../services/risk-service }
+    build: { context: ../.., dockerfile: services/risk-service/Dockerfile }
     container_name: sb-risk-service
     restart: unless-stopped
     ports: ["8089:8080"]
