@@ -1,6 +1,7 @@
 package com.sportsbetting.betting.repository;
 
 import com.sportsbetting.betting.model.BetEntity;
+import com.sportsbetting.betting.model.BetStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -10,4 +11,6 @@ public interface BetRepository extends JpaRepository<BetEntity, String> {
     Optional<BetEntity> findByUserIdAndIdempotencyKey(String userId, String idempotencyKey);
     List<BetEntity> findByUserIdOrderByBetIdAsc(String userId);
     List<BetEntity> findByEventIdOrderByBetIdAsc(String eventId);
+
+    List<BetEntity> findByEventIdAndStatus(String eventId, BetStatus status);
 }

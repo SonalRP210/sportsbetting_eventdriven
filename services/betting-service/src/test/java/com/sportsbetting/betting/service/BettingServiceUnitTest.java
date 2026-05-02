@@ -9,18 +9,22 @@ import com.sportsbetting.betting.model.OddsQuoteEntity;
 import com.sportsbetting.betting.repository.BetRepository;
 import com.sportsbetting.betting.repository.OddsQuoteRepository;
 import com.sportsbetting.betting.repository.OutboxEventRepository;
+import com.sportsbetting.platform.messaging.EventPayloadValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,12 +39,18 @@ class BettingServiceUnitTest {
     @Mock
     private OutboxEventRepository outboxEventRepository;
 
+    @Mock
+    @SuppressWarnings("unchecked")
+    private ObjectProvider<EventPayloadValidator> eventSchemaValidator;
+
     private BettingService newService() {
+        lenient().when(eventSchemaValidator.getIfAvailable()).thenReturn(null);
         return new BettingService(
                 betRepository,
                 oddsQuoteRepository,
                 outboxEventRepository,
-                new ObjectMapper()
+                new ObjectMapper(),
+                eventSchemaValidator
         );
     }
 
@@ -90,5 +100,35 @@ class BettingServiceUnitTest {
         assertThat(saved.getIdempotencyKey()).isEqualTo("idem-2");
 
         verify(outboxEventRepository).save(any());
+    }
+
+    @Test
+    void applyEventSettlementMarksWinnersAndLosers() {
+        BetEntity home = new BetEntity();
+        home.setBetId("BET-H");
+        home.setUserId("u1");
+        home.setEventId("event-001");
+        home.setSelection("HOME");
+        home.setStake(new BigDecimal("10.00"));
+        home.setOdds(new BigDecimal("2.00"));
+        home.setStatus(BetStatus.OPEN);
+
+        BetEntity away = new BetEntity();
+        away.setBetId("BET-A");
+        away.setUserId("u2");
+        away.setEventId("event-001");
+        away.setSelection("AWAY");
+        away.setStake(new BigDecimal("5.00"));
+        away.setOdds(new BigDecimal("3.00"));
+        away.setStatus(BetStatus.OPEN);
+
+        when(betRepository.findByEventIdAndStatus("event-001", BetStatus.OPEN)).thenReturn(List.of(home, away));
+
+        newService().applyEventSettlement("event-001", "HOME");
+
+        assertThat(home.getStatus()).isEqualTo(BetStatus.WON);
+        assertThat(away.getStatus()).isEqualTo(BetStatus.LOST);
+        verify(betRepository).save(home);
+        verify(betRepository).save(away);
     }
 }

@@ -34,6 +34,10 @@ class BetRepositoryDataJpaTest {
                 .get()
                 .extracting(BetEntity::getBetId)
                 .isEqualTo("BET-001");
+
+        assertThat(betRepository.findByEventIdAndStatus("event-1", BetStatus.OPEN))
+                .extracting(BetEntity::getBetId)
+                .containsExactlyInAnyOrder("BET-002", "BET-003");
     }
 
     private static BetEntity newBet(String betId, String userId, String eventId, String idempotencyKey) {

@@ -130,6 +130,7 @@ services:
     volumes:
       - ./debezium/register-connector.sh:/register.sh:ro
       - ./debezium/odds-outbox-connector.json:/odds-outbox-connector.json:ro
+      - ./debezium/betting-outbox-connector.json:/betting-outbox-connector.json:ro
     entrypoint: ["/bin/sh", "/register.sh"]
 
   prometheus:
@@ -267,7 +268,9 @@ services:
     container_name: sb-betting-service
     restart: unless-stopped
     ports: ["8094:8084"]
-    environment: *common_env
+    environment:
+      <<: *common_env
+      APP_KAFKA_SCHEMA_VALIDATION_ENABLED: "true"
     depends_on:
       postgres:
         condition: service_healthy

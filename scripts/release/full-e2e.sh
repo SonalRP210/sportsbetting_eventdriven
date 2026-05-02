@@ -82,4 +82,19 @@ curl -fsS "${BASE_URL}/users/user-1/exposure" >/dev/null
 curl -fsS "${BASE_URL}/wallet/user-1/balance" >/dev/null
 curl -fsS "${BASE_URL}/risk/total" >/dev/null
 
+echo "Verifying betting-service projected bet outcome (WON) after settlement..."
+python - <<PY
+import json
+import urllib.request
+
+base = "${BASE_URL}".rstrip("/")
+bet_id = "${BET_ID}"
+url = f"{base}/bets/{bet_id}"
+with urllib.request.urlopen(url, timeout=10) as r:
+    body = json.load(r)
+status = body.get("status", "")
+if status != "WON":
+    raise SystemExit(f"expected bet status WON after settlement on HOME, got {status!r}")
+PY
+
 echo "Full E2E release gate passed."

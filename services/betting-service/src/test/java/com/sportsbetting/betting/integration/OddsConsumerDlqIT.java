@@ -2,7 +2,7 @@ package com.sportsbetting.betting.integration;
 
 import com.sportsbetting.betting.model.OutboxEventEntity;
 import com.sportsbetting.betting.repository.OutboxEventRepository;
-import com.sportsbetting.betting.service.OutboxDispatcher;
+import com.sportsbetting.betting.outbox.OutboxDispatcher;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -60,6 +60,7 @@ class OddsConsumerDlqIT {
         registry.add("app.kafka.consumer.max-attempts", () -> "2");
         registry.add("app.kafka.consumer.backoff-ms", () -> "50");
         registry.add("app.kafka.dlq.suffix", () -> ".dlq");
+        registry.add("app.outbox.poll.enabled", () -> "true");
     }
 
     @Test

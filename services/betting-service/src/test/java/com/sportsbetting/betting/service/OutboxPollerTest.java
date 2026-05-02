@@ -1,5 +1,8 @@
 package com.sportsbetting.betting.service;
 
+import com.sportsbetting.betting.outbox.OutboxDispatcher;
+import com.sportsbetting.betting.outbox.OutboxPoller;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -16,7 +19,7 @@ class OutboxPollerTest {
 
     @Test
     void pollDispatchesPending() {
-        OutboxPoller poller = new OutboxPoller(outboxDispatcher);
+        OutboxPoller poller = new OutboxPoller(outboxDispatcher, new SimpleMeterRegistry());
         poller.poll();
         verify(outboxDispatcher).dispatchPending();
     }
@@ -24,7 +27,7 @@ class OutboxPollerTest {
     @Test
     void pollSwallowsDispatcherErrors() {
         doThrow(new RuntimeException("kafka down")).when(outboxDispatcher).dispatchPending();
-        OutboxPoller poller = new OutboxPoller(outboxDispatcher);
+        OutboxPoller poller = new OutboxPoller(outboxDispatcher, new SimpleMeterRegistry());
         poller.poll();
         verify(outboxDispatcher).dispatchPending();
     }

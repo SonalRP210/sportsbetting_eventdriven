@@ -5,7 +5,8 @@ topics:
   - name: betting.bet.cancelled.v1
     partitions: 3
     replicationFactor: 1
-  - name: odds.odds.updated.v1
+  # Aligned with runtime broker topics (see infra/local/kafka/init-topics.sh).
+  - name: odds.updated.v1
     partitions: 3
     replicationFactor: 1
   - name: settlement.event.settled.v1
