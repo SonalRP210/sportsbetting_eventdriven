@@ -22,8 +22,10 @@ import java.time.Instant;
  * captured the moment it is committed, before this job even runs. It is
  * therefore safe to delete any row that is older than the retention window.
  *
- * Default retention: 2 hours (configurable via app.outbox.retention-hours).
- * Default schedule:  every 15 minutes.
+ * Default retention (non-production profile): 2 hours — aggressive for incident forensics;
+ * production commonly uses longer windows or archives cold rows to object storage before delete.
+ *
+ * Default schedule: every 15 minutes (cron: {@code app.outbox.cleanup.cron}).
  */
 @Component
 public class OutboxCleanup {

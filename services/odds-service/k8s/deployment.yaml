@@ -12,16 +12,30 @@ spec:
       labels:
         app: odds-service
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: odds-service
       containers:
         - name: odds-service
           image: odds-service:latest
+          env:
+            # Flyway migrate + Hibernate validate; tune DB/Kafka via ConfigMap/Secret (e.g. SPRING_DATASOURCE_URL).
+            - name: SPRING_PROFILES_ACTIVE
+              value: production
           ports:
-            - containerPort: 8085
+            - name: http
+              containerPort: 8080
           readinessProbe:
             httpGet:
-              path: /health
-              port: 8085
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
           livenessProbe:
             httpGet:
-              path: /health
-              port: 8085
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30

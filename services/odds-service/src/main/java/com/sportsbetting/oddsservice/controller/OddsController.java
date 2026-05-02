@@ -29,6 +29,11 @@ public class OddsController {
         this.outboxDispatcher = outboxDispatcher;
     }
 
+    /**
+     * Validates the batch, then persists in bounded DB chunks ({@code app.odds.feed.chunk-size}).
+     * {@code 202 ACCEPTED} means writes were scheduled successfully — not that every downstream consumer
+     * or bet-placement path has observed the price; correlate via {@code updatedAt} on reads when you need RYW semantics.
+     */
     @PostMapping("/odds-feed")
     public ResponseEntity<Map<String, String>> oddsFeed(@RequestBody @Valid List<OddsUpdate> updates) {
         oddsService.consumeOddsFeed(updates);
