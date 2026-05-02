@@ -16,6 +16,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Kubernetes manifests (kubectl client dry-run)
+        run: bash scripts/ci/k8s-manifest-dry-run.sh
+
       - name: Setup Java 21
         uses: actions/setup-java@v4
         with:

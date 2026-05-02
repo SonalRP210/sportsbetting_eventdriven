@@ -5,7 +5,7 @@ This repository is structured for **distributed, event-driven** collaboration: s
 ## Reusable HTTP security (`platform/service-security`)
 
 - **Not odds-only**: add a dependency on `**com.sportsbetting:service-security`** to any Spring Boot service and set the same `**app.security.*`** / `**JWT_ISSUER_URI**` / `**APP_SECURITY_API_KEY**` properties. Auto-configuration is registered via `**META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports**`.
-- **Default remains open** (`app.security.enabled=false`) until you enable it per environment. Use the same K8s Secret / env patterns as odds-service.
+- **Default remains open** (`app.security.enabled=false`) until you enable it per environment. Use the same K8s Secret / env patterns as **odds-service** and **betting-service** (`services/*/k8s/secret.example.yaml`).
 
 ## Dependency & static-analysis governance
 

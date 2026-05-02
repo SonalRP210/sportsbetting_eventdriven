@@ -12,16 +12,52 @@ spec:
       labels:
         app: betting-service
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: betting-service
       containers:
         - name: betting-service
           image: betting-service:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          envFrom:
+            - configMapRef:
+                name: betting-service-config
+                optional: true
+            - secretRef:
+                name: betting-service-secrets
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: production
           ports:
-            - containerPort: 8084
+            - name: http
+              containerPort: 8084
           readinessProbe:
             httpGet:
-              path: /health
-              port: 8084
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
           livenessProbe:
             httpGet:
-              path: /health
-              port: 8084
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+      volumes:
+        - name: tmp
+          emptyDir: {}

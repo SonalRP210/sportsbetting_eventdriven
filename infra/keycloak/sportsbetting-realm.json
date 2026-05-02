@@ -8,7 +8,11 @@
       {"name": "ODDS_READ"},
       {"name": "ODDS_FEED_WRITE"},
       {"name": "ODDS_OPERATIONS"},
-      {"name": "ODDS_ADMIN"}
+      {"name": "ODDS_ADMIN"},
+      {"name": "BET_READ"},
+      {"name": "BET_PLACE"},
+      {"name": "BETTING_OPERATIONS"},
+      {"name": "BETTING_ADMIN"}
     ]
   },
   "users": [
@@ -16,25 +20,25 @@
       "username": "viewer",
       "enabled": true,
       "credentials": [{"type": "password", "value": "viewer", "temporary": false}],
-      "realmRoles": ["ODDS_READ"]
+      "realmRoles": ["ODDS_READ", "BET_READ"]
     },
     {
       "username": "feeder",
       "enabled": true,
       "credentials": [{"type": "password", "value": "feeder", "temporary": false}],
-      "realmRoles": ["ODDS_READ", "ODDS_FEED_WRITE"]
+      "realmRoles": ["ODDS_READ", "ODDS_FEED_WRITE", "BET_READ", "BET_PLACE"]
     },
     {
       "username": "ops",
       "enabled": true,
       "credentials": [{"type": "password", "value": "ops", "temporary": false}],
-      "realmRoles": ["ODDS_READ", "ODDS_OPERATIONS"]
+      "realmRoles": ["ODDS_READ", "ODDS_OPERATIONS", "BETTING_OPERATIONS", "BET_READ", "BET_PLACE"]
     },
     {
       "username": "admin",
       "enabled": true,
       "credentials": [{"type": "password", "value": "admin", "temporary": false}],
-      "realmRoles": ["ODDS_ADMIN", "ODDS_READ", "ODDS_FEED_WRITE", "ODDS_OPERATIONS"]
+      "realmRoles": ["ODDS_ADMIN", "ODDS_READ", "ODDS_FEED_WRITE", "ODDS_OPERATIONS", "BETTING_ADMIN", "BET_READ", "BET_PLACE", "BETTING_OPERATIONS"]
     }
   ],
   "clients": [

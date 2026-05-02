@@ -1,4 +1,9 @@
 services:
+  # Realm JSON is bind-mounted; --import-realm runs when Keycloak creates a fresh dev store.
+  # If you changed infra/keycloak/sportsbetting-realm.json (e.g. BET_READ / BET_PLACE for feeder) but tokens
+  # still lack new roles, remove the Keycloak container (and any attached volume) so import runs again:
+  #   docker compose rm -sf keycloak && docker compose up -d keycloak
+  # Or update roles in the Admin UI. See README "Local Keycloak and realm import".
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     container_name: sb-keycloak
@@ -271,13 +276,16 @@ services:
     environment:
       <<: *common_env
       APP_KAFKA_SCHEMA_VALIDATION_ENABLED: "true"
+      JWT_ISSUER_URI: http://keycloak:8080/realms/sportsbetting
     depends_on:
       postgres:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+      keycloak:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/api/v1/ping >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/actuator/health/readiness >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 10

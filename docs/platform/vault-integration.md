@@ -1,6 +1,6 @@
 # HashiCorp Vault (secrets + TLS) with api-gateway → odds-service
 
-This repo assumes **machine-to-machine** traffic: an upstream system calls **api-gateway**, which proxies to **odds-service**. End-user login stays **out of scope** (existing gateway `/auth/login` stub is unchanged).
+This repo assumes **machine-to-machine** traffic: an upstream system calls **api-gateway**, which proxies to **odds-service** and other backends (for example **betting-service**). End-user login stays **out of scope** (existing gateway `/auth/login` stub is unchanged). **betting-service** mirrors **odds-service** for Vault-enabled builds and KV layout.
 
 ## 1. Secrets (Vault KV + Spring)
 
@@ -8,12 +8,12 @@ This repo assumes **machine-to-machine** traffic: an upstream system calls **api
 
 **Application changes (already in tree):**
 
-- **odds-service** can include **`spring-cloud-starter-vault-config`** by building with Maven profile **`-Pvault`** (dependency is not on the classpath by default, so local tests and stacks without Vault stay simple).
+- **odds-service** and **betting-service** can include **`spring-cloud-starter-vault-config`** by building with Maven profile **`-Pvault`** (dependency is not on the classpath by default, so local tests and stacks without Vault stay simple).
 - Root POM **`dependencyManagement`** imports **`spring-cloud-dependencies` 2023.0.5** for aligned Cloud stack versions when the profile is used.
-- **`application-vault.properties`** enables Vault **Kubernetes auth** and **KV** reads when Spring profile **`vault`** is active (`SPRING_PROFILES_ACTIVE=production,vault`).
-- **`spring.cloud.vault.enabled=false`** remains in default **`application.properties`** for clarity when the Vault starter is present.
+- **`application-vault.properties`** (per service) enables Vault **Kubernetes auth** and **KV** reads when Spring profile **`vault`** is active (`SPRING_PROFILES_ACTIVE=production,vault`). Default Kubernetes role names: **`VAULT_K8S_ROLE`** `odds-service` or `betting-service` (override per deployment).
+- **`spring.cloud.vault.enabled=false`** remains in each service’s default **`application.properties`** when the Vault starter is present.
 
-**Build Vault-enabled jar/image:** `mvn package -pl services/odds-service -Pvault` (or activate **`vault`** in your Docker layer).
+**Build Vault-enabled jar/image:** `mvn package -pl services/odds-service -Pvault` and/or `mvn package -pl services/betting-service -Pvault` (or activate **`vault`** in your Docker layer).
 
 **Runtime:** set profiles to include **`vault`** together with **`production`**, for example:
 
@@ -21,9 +21,9 @@ This repo assumes **machine-to-machine** traffic: an upstream system calls **api
 
 **Vault operator work:**
 
-1. Enable **`kubernetes`** auth and bind the odds-service **ServiceAccount** to a Vault role (least privilege).
+1. Enable **`kubernetes`** auth and bind each workload **ServiceAccount** to a Vault role (least privilege), e.g. **odds-service** and **betting-service**.
 2. Store KV v2 data under your backend (default **`secret`**) using Spring-friendly keys, for example at  
-   `secret/data/odds-service/production`:
+   `secret/data/odds-service/production` and `secret/data/betting-service/production`:
 
    - `SPRING_DATASOURCE_PASSWORD`
    - `SPRING_KAFKA_BOOTSTRAP_SERVERS` (if not in ConfigMap)
@@ -60,7 +60,7 @@ server.ssl.bundle.name=odds-server
 
 ## 3. Auth headers through the gateway
 
-When **`service-security`** is enabled on odds-service, callers must send **`Authorization: Bearer …`** (JWT) or **`X-API-Key`** (API-key mode).
+When **`service-security`** is enabled on **odds-service** or **betting-service**, callers must send **`Authorization: Bearer …`** (JWT) or **`X-API-Key`** (API-key mode).
 
 **Application changes (already in tree):**
 
@@ -69,14 +69,14 @@ When **`service-security`** is enabled on odds-service, callers must send **`Aut
 
 ## 4. Kubernetes references
 
-- Annotate the odds Pod for **Vault Agent Injector** or use **Vault CSI** — store templates next to your Helm/Kustomize (see HashiCorp docs for your chart version).
-- Example patch listing Agent annotations + volume mounts: **`services/odds-service/k8s/vault-agent-injector.example.yaml`** (snippet only; merge into your real Deployment).
+- Annotate each Pod for **Vault Agent Injector** or use **Vault CSI** — store templates next to your Helm/Kustomize (see HashiCorp docs for your chart version).
+- Example snippets: **`services/odds-service/k8s/vault-agent-injector.example.yaml`**, **`services/betting-service/k8s/vault-agent-injector.example.yaml`** (merge into your real Deployments).
 
 ## 5. Summary checklist
 
 | Layer | What you configure |
 | ----- | ------------------- |
 | Vault | KV secrets, PKI roles, Kubernetes auth, policies |
-| odds-service Pod | Agent/CSI volumes, `SPRING_PROFILES_ACTIVE=production,vault`, PEM paths for server SSL |
-| api-gateway Pod | PEM bundle for trust (+ client cert for mTLS), `gateway.downstream.ssl.bundle-name`, `gateway.routes.odds=https://…` |
-| Network | Restrict who can reach gateway and odds; optional NetworkPolicy unchanged in principle |
+| odds-service / betting-service Pods | Agent/CSI volumes, `SPRING_PROFILES_ACTIVE=production,vault`, PEM paths for server SSL where used |
+| api-gateway Pod | PEM bundle for trust (+ client cert for mTLS), `gateway.downstream.ssl.bundle-name`, downstream route URLs |
+| Network | Restrict who can reach gateway and backends; optional NetworkPolicy unchanged in principle |

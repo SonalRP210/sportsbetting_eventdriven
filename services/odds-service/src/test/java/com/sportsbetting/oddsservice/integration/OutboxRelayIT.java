@@ -9,7 +9,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,6 +76,21 @@ class OutboxRelayIT {
         registry.add("spring.kafka.listener.auto-startup", () -> "false");
         registry.add("app.kafka.schema-validation.enabled", () -> "false");
         registry.add("app.outbox.poll.enabled", () -> "true");
+    }
+
+    @BeforeEach
+    void ensureTopic() throws Exception {
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
+        try (AdminClient admin = AdminClient.create(props)) {
+            try {
+                admin.createTopics(List.of(new NewTopic(OddsUpdatedEvent.EVENT_TYPE, 1, (short) 1))).all().get();
+            } catch (ExecutionException ex) {
+                if (!(ex.getCause() instanceof TopicExistsException)) {
+                    throw ex;
+                }
+            }
+        }
     }
 
     @Test

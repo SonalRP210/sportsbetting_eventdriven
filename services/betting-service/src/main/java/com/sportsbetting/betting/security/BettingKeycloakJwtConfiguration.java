@@ -33,8 +33,6 @@ public class BettingKeycloakJwtConfiguration {
     @ConditionalOnProperty(name = "app.security.auth-type", havingValue = "jwt")
     HttpApiAuthorizationCustomizer bettingRoleBasedApiAuthorization() {
         return auth -> {
-            auth.requestMatchers(HttpMethod.GET, "/api/v1/ping").permitAll();
-
             auth.requestMatchers(HttpMethod.POST, "/api/v1/bets")
                     .hasAnyRole("BET_PLACE", "BETTING_ADMIN");
             auth.requestMatchers(HttpMethod.GET, "/api/v1/bets/**")
