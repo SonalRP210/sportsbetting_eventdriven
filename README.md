@@ -14,7 +14,6 @@ Event-driven microservice platform for sports betting (Java/Spring Boot).
 - `postgres`: `5433` (container port `5432`)
 - `kafka/redpanda`: `19092` (container port `9092`)
 - `api-gateway`: `8070` (container port `8080`)
-- `auth-service`: `8081`
 - `user-service`: `8082`
 - `wallet-service`: `8083`
 - `betting-service`: `8094` (container port `8084`)
