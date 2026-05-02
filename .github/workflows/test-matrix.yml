@@ -30,8 +30,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: Integration tests (Testcontainers) + coverage merge
-        run: mvn -B -q -Pquality-tools verify -Dspotbugs.skip=true -Dcheckstyle.skip=true -Dpmd.skip=true
+      - name: Integration tests (Testcontainers) + coverage merge + static analysis
+        run: mvn -B -q -Pquality-tools verify
 
   e2e:
     runs-on: ubuntu-latest
