@@ -1,8 +1,5 @@
-# Sample Prometheus alerting rules for odds-service and related paths.
-# Copy into Prometheus `rule_files` or paste under `spec.groups` in a PrometheusRule CRD.
-#
-# Application metrics assume Pod scrape (kube-prometheus PodMonitor / ServiceMonitor) so targets carry
-# Kubernetes labels such as namespace, pod, container. Matchers below align with
+# Prometheus alerting rules for odds-service (Pod scrape: kube-prometheus PodMonitor / ServiceMonitor).
+# Targets carry Kubernetes labels such as namespace, pod, container. Matchers align with
 # services/odds-service/k8s/deployment.yaml (container name `odds-service`).
 #
 # If multiple namespaces deploy similarly named pods, add a fixed namespace matcher on every expr line:
