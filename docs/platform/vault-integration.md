@@ -8,9 +8,12 @@ This repo assumes **machine-to-machine** traffic: an upstream system calls **api
 
 **Application changes (already in tree):**
 
-- **odds-service** depends on **`spring-cloud-starter-vault-config`** (BOM: `spring-cloud-dependencies` **2023.0.5** on the root POM).
-- Default: **`spring.cloud.vault.enabled=false`** in `services/odds-service/src/main/resources/application.properties`.
-- With profile **`vault`**, **`application-vault.properties`** enables Vault **Kubernetes auth** and **KV** reads into the Spring `Environment`.
+- **odds-service** can include **`spring-cloud-starter-vault-config`** by building with Maven profile **`-Pvault`** (dependency is not on the classpath by default, so local tests and stacks without Vault stay simple).
+- Root POM **`dependencyManagement`** imports **`spring-cloud-dependencies` 2023.0.5** for aligned Cloud stack versions when the profile is used.
+- **`application-vault.properties`** enables Vault **Kubernetes auth** and **KV** reads when Spring profile **`vault`** is active (`SPRING_PROFILES_ACTIVE=production,vault`).
+- **`spring.cloud.vault.enabled=false`** remains in default **`application.properties`** for clarity when the Vault starter is present.
+
+**Build Vault-enabled jar/image:** `mvn package -pl services/odds-service -Pvault` (or activate **`vault`** in your Docker layer).
 
 **Runtime:** set profiles to include **`vault`** together with **`production`**, for example:
 
