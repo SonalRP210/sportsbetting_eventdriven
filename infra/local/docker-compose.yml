@@ -128,8 +128,6 @@ services:
     depends_on:
       api-gateway:
         condition: service_started
-      auth-service:
-        condition: service_started
       user-service:
         condition: service_started
       wallet-service:
@@ -185,8 +183,6 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
-      auth-service:
-        condition: service_started
       user-service:
         condition: service_started
       betting-service:
@@ -206,23 +202,6 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
-      timeout: 5s
-      retries: 10
-
-  auth-service:
-    build: { context: ../.., dockerfile: services/auth-service/Dockerfile }
-    container_name: sb-auth-service
-    restart: unless-stopped
-    ports: ["8081:8080"]
-    environment: *common_env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/auth/login >/dev/null 2>&1 || exit 1"]
-      interval: 30s
       timeout: 5s
       retries: 10
 
