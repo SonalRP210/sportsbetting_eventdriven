@@ -1,4 +1,4 @@
-package com.sportsbetting.oddsservice.model;
+package com.sportsbetting.oddsservice.model.odds;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;

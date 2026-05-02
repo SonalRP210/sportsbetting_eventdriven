@@ -1,4 +1,4 @@
-package com.sportsbetting.oddsservice.model;
+package com.sportsbetting.oddsservice.model.odds;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

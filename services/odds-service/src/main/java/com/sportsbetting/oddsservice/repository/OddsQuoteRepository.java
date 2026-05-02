@@ -1,6 +1,6 @@
 package com.sportsbetting.oddsservice.repository;
 
-import com.sportsbetting.oddsservice.model.OddsQuoteEntity;
+import com.sportsbetting.oddsservice.model.odds.OddsQuoteEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;

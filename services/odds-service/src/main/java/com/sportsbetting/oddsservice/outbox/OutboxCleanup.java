@@ -1,4 +1,4 @@
-package com.sportsbetting.oddsservice.service;
+package com.sportsbetting.oddsservice.outbox;
 
 import com.sportsbetting.oddsservice.repository.OutboxEventRepository;
 import org.slf4j.Logger;
@@ -15,7 +15,7 @@ import java.time.Instant;
  * Deletes old rows from odds.outbox_events on a schedule.
  *
  * When Debezium CDC is the primary relay, rows are never marked published=true
- * and never deleted by the OutboxDispatcher. Without this cleanup the table
+ * and never deleted by the {@link OutboxDispatcher}. Without this cleanup the table
  * grows unbounded.
  *
  * Debezium reads INSERT events directly from the Postgres WAL — the row is
@@ -32,14 +32,14 @@ public class OutboxCleanup {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxCleanup.class);
 
-    private final OutboxEventRepository repository;
+    private final OutboxEventRepository outboxEventRepository;
     private final long retentionHours;
 
     public OutboxCleanup(
             OutboxEventRepository repository,
             @Value("${app.outbox.retention-hours:2}") long retentionHours
     ) {
-        this.repository = repository;
+        this.outboxEventRepository = repository;
         this.retentionHours = retentionHours;
     }
 
@@ -47,7 +47,7 @@ public class OutboxCleanup {
     @Transactional
     public void cleanup() {
         Instant cutoff = Instant.now().minus(Duration.ofHours(retentionHours));
-        int deleted = repository.deleteByCreatedAtBefore(cutoff);
+        int deleted = outboxEventRepository.deleteByCreatedAtBefore(cutoff);
         if (deleted > 0) {
             log.info("Outbox cleanup: deleted {} rows older than {} hours", deleted, retentionHours);
         }

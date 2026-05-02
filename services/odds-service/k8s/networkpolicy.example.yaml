@@ -1,0 +1,22 @@
+# Example NetworkPolicy — restrict who can reach the app port (adjust namespaceSelector for your ingress / mesh).
+# Egress is not restricted here so DNS and Kafka/Postgres remain reachable; add explicit egress rules when your CNI requires them.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: odds-service
+  labels:
+    app: odds-service
+spec:
+  podSelector:
+    matchLabels:
+      app: odds-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080

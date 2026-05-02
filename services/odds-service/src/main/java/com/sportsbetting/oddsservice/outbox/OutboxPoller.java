@@ -1,4 +1,4 @@
-package com.sportsbetting.oddsservice.service;
+package com.sportsbetting.oddsservice.outbox;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;

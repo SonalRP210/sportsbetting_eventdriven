@@ -1,9 +1,14 @@
 package com.sportsbetting.oddsservice.controller;
 
-import com.sportsbetting.oddsservice.model.DomainEvent;
-import com.sportsbetting.oddsservice.model.OddsUpdate;
+import com.sportsbetting.oddsservice.api.dto.OddsFeedAcceptedResponse;
+import com.sportsbetting.oddsservice.api.dto.OddsLookupResponse;
+import com.sportsbetting.oddsservice.api.dto.OddsNotFoundResponse;
+import com.sportsbetting.oddsservice.api.dto.OddsQuoteResponse;
+import com.sportsbetting.oddsservice.api.dto.OutboxDispatchResponse;
+import com.sportsbetting.oddsservice.api.dto.OutboxEventsResponse;
+import com.sportsbetting.oddsservice.model.odds.OddsUpdate;
+import com.sportsbetting.oddsservice.outbox.OutboxDispatcher;
 import com.sportsbetting.oddsservice.service.OddsService;
-import com.sportsbetting.oddsservice.service.OutboxDispatcher;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -35,44 +39,31 @@ public class OddsController {
      * or bet-placement path has observed the price; correlate via {@code updatedAt} on reads when you need RYW semantics.
      */
     @PostMapping("/odds-feed")
-    public ResponseEntity<Map<String, String>> oddsFeed(@RequestBody @Valid List<OddsUpdate> updates) {
+    public ResponseEntity<OddsFeedAcceptedResponse> oddsFeed(@RequestBody @Valid List<OddsUpdate> updates) {
         oddsService.consumeOddsFeed(updates);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("message", "Odds feed accepted"));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(OddsFeedAcceptedResponse.accepted());
     }
 
     @GetMapping("/odds/{eventId}/{selection}")
-    public ResponseEntity<Map<String, Object>> getOdds(
+    public ResponseEntity<OddsLookupResponse> getOdds(
             @PathVariable String eventId,
             @PathVariable String selection
     ) {
         return oddsService.getOdds(eventId, selection)
-                .<ResponseEntity<Map<String, Object>>>map(odds -> ResponseEntity.ok(Map.of(
-                        "eventId", eventId,
-                        "selection", selection,
-                        "odds", odds
-                )))
+                .<ResponseEntity<OddsLookupResponse>>map(odds ->
+                        ResponseEntity.ok(new OddsQuoteResponse(eventId, selection, odds)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "odds_not_found")));
+                        .body(OddsNotFoundResponse.oddsNotFound()));
     }
 
     @GetMapping("/internal/outbox")
-    public ResponseEntity<Map<String, List<DomainEvent>>> outbox() {
-        return ResponseEntity.ok(Map.of("events", oddsService.outboxEvents()));
+    public ResponseEntity<OutboxEventsResponse> outbox() {
+        return ResponseEntity.ok(new OutboxEventsResponse(oddsService.outboxEvents()));
     }
 
     @PostMapping("/internal/outbox/dispatch")
-    public ResponseEntity<Map<String, Object>> dispatchOutbox() {
+    public ResponseEntity<OutboxDispatchResponse> dispatchOutbox() {
         int sent = outboxDispatcher.dispatchPending();
-        return ResponseEntity.ok(Map.of("dispatched", sent));
-    }
-
-    /**
-     * Test/local seed helper. Accepts the same shape as /odds-feed for a single update.
-     * Protected by the internal path prefix — do not expose via the API gateway in production.
-     */
-    @PostMapping("/internal/seed-odds")
-    public ResponseEntity<Map<String, Boolean>> seedOdds(@RequestBody @Valid OddsUpdate request) {
-        oddsService.consumeOddsFeed(List.of(request));
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("accepted", true));
+        return ResponseEntity.ok(new OutboxDispatchResponse(sent));
     }
 }
