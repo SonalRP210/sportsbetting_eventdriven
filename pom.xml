@@ -32,8 +32,8 @@
 
   <modules>
     <module>platform/event-support</module>
+    <module>platform/service-security</module>
     <module>services/api-gateway</module>
-    <module>services/auth-service</module>
     <module>services/user-service</module>
     <module>services/betting-service</module>
     <module>services/wallet-service</module>
@@ -49,6 +49,11 @@
       <dependency>
         <groupId>com.sportsbetting</groupId>
         <artifactId>event-support</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.sportsbetting</groupId>
+        <artifactId>service-security</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
