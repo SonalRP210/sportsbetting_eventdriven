@@ -1,4 +1,6 @@
 package com.sportsbetting.apigateway.service;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.beans.factory.annotation.Value;
@@ -6,8 +8,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
 
@@ -18,7 +23,10 @@ import java.util.Map;
 @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-injected RestClient singleton")
 public class GatewayService {
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
     private final String applicationName;
+    private final String oidcTokenEndpoint;
+    private final String oidcClientId;
     private final String bettingBaseUrl;
     private final String riskBaseUrl;
     private final String walletBaseUrl;
@@ -29,7 +37,10 @@ public class GatewayService {
 
     public GatewayService(
             RestClient gatewayRestClient,
+            ObjectMapper objectMapper,
             @Value("${spring.application.name:api-gateway}") String applicationName,
+            @Value("${gateway.oidc.token-endpoint:}") String oidcTokenEndpoint,
+            @Value("${gateway.oidc.client-id:odds-gateway}") String oidcClientId,
             @Value("${gateway.routes.betting:http://betting-service:8084}") String bettingBaseUrl,
             @Value("${gateway.routes.risk:http://risk-service:8080}") String riskBaseUrl,
             @Value("${gateway.routes.wallet:http://wallet-service:8080}") String walletBaseUrl,
@@ -39,7 +50,10 @@ public class GatewayService {
             @Value("${gateway.routes.odds:http://odds-service:8080}") String oddsBaseUrl
     ) {
         this.restClient = gatewayRestClient;
+        this.objectMapper = objectMapper;
         this.applicationName = applicationName;
+        this.oidcTokenEndpoint = oidcTokenEndpoint;
+        this.oidcClientId = oidcClientId;
         this.bettingBaseUrl = bettingBaseUrl;
         this.riskBaseUrl = riskBaseUrl;
         this.walletBaseUrl = walletBaseUrl;
@@ -125,13 +139,62 @@ public class GatewayService {
     }
 
     /**
-     * Login is not proxied to an in-repo auth microservice; use your IdP (OAuth2/OIDC) and
-     * {@code service-security} on downstream APIs. This endpoint keeps the route shape but returns {@code 501}.
+     * When {@code gateway.oidc.token-endpoint} is unset, returns {@code 501}.
+     * When set (typically Keycloak in Docker), performs an OAuth 2 Password Grant (RFC legacy;
+     * use Authorization Code flow in production browsers) and returns the IdP token JSON verbatim.
      */
     public ResponseEntity<String> login(String payload) {
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
-                .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                .body("{\"error\":\"AUTH_NOT_IMPLEMENTED\",\"message\":\"Use external IdP; stub auth-service was removed.\"}");
+        if (oidcTokenEndpoint == null || oidcTokenEndpoint.isBlank()) {
+            return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+                    .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                    .body("{\"error\":\"AUTH_NOT_IMPLEMENTED\",\"message\":\"Configure gateway.oidc.token-endpoint (e.g. Keycloak token URL).\"}");
+        }
+
+        JsonNode tree;
+        try {
+            tree = objectMapper.readTree(payload == null || payload.isBlank() ? "{}" : payload);
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .body("{\"error\":\"INVALID_LOGIN_JSON\"}");
+        }
+        String username = textOrNull(tree, "username");
+        String password = textOrNull(tree, "password");
+        if (username == null || password == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .body("{\"error\":\"USERNAME_PASSWORD_REQUIRED\"}");
+        }
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "password");
+        form.add("client_id", oidcClientId);
+        form.add("username", username);
+        form.add("password", password);
+
+        try {
+            String body = restClient.post()
+                    .uri(oidcTokenEndpoint)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(form)
+                    .retrieve()
+                    .body(String.class);
+            return ResponseEntity.status(HttpStatus.OK)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .body(body == null ? "" : body);
+        } catch (HttpStatusCodeException ex) {
+            return ResponseEntity.status(ex.getStatusCode())
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .body(ex.getResponseBodyAsString());
+        }
+    }
+
+    private static String textOrNull(JsonNode tree, String field) {
+        if (!tree.hasNonNull(field)) {
+            return null;
+        }
+        String value = tree.get(field).asText();
+        return value == null || value.isBlank() ? null : value;
     }
 
     public ResponseEntity<String> getUser(String userId, DownstreamAuthHeaders downstreamAuth) {

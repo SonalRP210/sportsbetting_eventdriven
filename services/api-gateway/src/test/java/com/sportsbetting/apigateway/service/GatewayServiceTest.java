@@ -1,4 +1,5 @@
 package com.sportsbetting.apigateway.service;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +14,7 @@ import org.springframework.web.client.RestClient;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -43,7 +45,10 @@ class GatewayServiceTest {
         RestClient client = builder.build();
         service = new GatewayService(
                 client,
+                new ObjectMapper(),
                 "api-gateway",
+                "",
+                "odds-gateway",
                 BETTING,
                 RISK,
                 WALLET,
@@ -68,10 +73,43 @@ class GatewayServiceTest {
     }
 
     @Test
-    void loginReturnsNotImplementedWithoutUpstreamCall() {
+    void loginReturnsNotImplementedWhenTokenEndpointNotConfigured() {
         ResponseEntity<String> res = service.login("{}");
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_IMPLEMENTED);
-        assertThat(res.getBody()).contains("AUTH_NOT_IMPLEMENTED");
+        assertThat(res.getBody()).contains("AUTH_NOT_IMPLEMENTED").contains("gateway.oidc.token-endpoint");
+    }
+
+    @Test
+    void loginProxiesPasswordGrantToKeycloakCompatibleEndpoint() {
+        String tokenEndpoint = "http://idp.local/realms/demo/protocol/openid-connect/token";
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer srv = MockRestServiceServer.bindTo(builder).build();
+        srv.expect(requestTo(tokenEndpoint))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().string(containsString("grant_type=password")))
+                .andRespond(withSuccess(
+                        "{\"access_token\":\"jwt\",\"expires_in\":300,\"refresh_token\":\"r\",\"scope\":\"openid\"}",
+                        MediaType.APPLICATION_JSON));
+
+        GatewayService keyed = new GatewayService(
+                builder.build(),
+                new ObjectMapper(),
+                "api-gateway",
+                tokenEndpoint,
+                "cid",
+                BETTING,
+                RISK,
+                WALLET,
+                USER,
+                INGESTION,
+                SETTLEMENT,
+                ODDS
+        );
+
+        ResponseEntity<String> res = keyed.login("{\"username\":\"u1\",\"password\":\"s3cret\"}");
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody()).contains("\"access_token\":\"jwt\"");
+        srv.verify();
     }
 
     @Test

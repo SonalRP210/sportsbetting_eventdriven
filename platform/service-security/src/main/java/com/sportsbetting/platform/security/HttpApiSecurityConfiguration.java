@@ -1,15 +1,19 @@
 package com.sportsbetting.platform.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Configuration(proxyBeanMethods = false)
 public class HttpApiSecurityConfiguration {
@@ -20,7 +24,9 @@ public class HttpApiSecurityConfiguration {
             HttpApiSecurityProperties props,
             ApiKeyAuthenticationFilter apiKeyAuthenticationFilter,
             RestAuthenticationEntryPoint authenticationEntryPoint,
-            RestAccessDeniedHandler accessDeniedHandler
+            RestAccessDeniedHandler accessDeniedHandler,
+            ObjectProvider<JwtAuthenticationConverter> jwtAuthenticationConverterProvider,
+            List<HttpApiAuthorizationCustomizer> authorizationCustomizers
     ) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable);
         http.cors(AbstractHttpConfigurer::disable);
@@ -42,15 +48,24 @@ public class HttpApiSecurityConfiguration {
             return http.build();
         }
 
-        http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-                .requestMatchers("/api/**", "/actuator/**").authenticated()
-                .anyRequest().denyAll());
+        List<HttpApiAuthorizationCustomizer> orderedCustomizers =
+                authorizationCustomizers == null ? List.of() : new ArrayList<>(authorizationCustomizers);
+
+        http.authorizeHttpRequests(auth -> {
+            auth.requestMatchers("/actuator/health", "/actuator/health/**").permitAll();
+            for (HttpApiAuthorizationCustomizer customizer : orderedCustomizers) {
+                customizer.customize(auth);
+            }
+            auth.requestMatchers("/api/**", "/actuator/**").authenticated();
+            auth.anyRequest().denyAll();
+        });
 
         if (props.getAuthType() == AuthType.API_KEY) {
             http.addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         } else {
-            http.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+            JwtAuthenticationConverter converter = jwtAuthenticationConverterProvider.getIfAvailable(
+                    JwtAuthenticationConverter::new);
+            http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)));
         }
 
         return http.build();

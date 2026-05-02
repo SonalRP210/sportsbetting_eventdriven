@@ -1,4 +1,23 @@
 services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: sb-keycloak
+    restart: unless-stopped
+    command: ["start-dev", "--http-port=8080", "--import-realm"]
+    ports:
+      - "8090:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ../keycloak/sportsbetting-realm.json:/opt/keycloak/data/import/sportsbetting-realm.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 35
+      start_period: 90s
+
   postgres:
     image: postgres:16-alpine
     container_name: sb-postgres
@@ -178,6 +197,8 @@ services:
       APP_KAFKA_DLT_SUFFIX: .dlq
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       APP_KAFKA_SCHEMA_VALIDATION_ENABLED: "false"
+      GATEWAY_OIDC_TOKEN_ENDPOINT: http://keycloak:8080/realms/sportsbetting/protocol/openid-connect/token
+      GATEWAY_OIDC_CLIENT_ID: odds-gateway
     depends_on:
       postgres:
         condition: service_healthy
@@ -199,6 +220,8 @@ services:
         condition: service_started
       risk-service:
         condition: service_started
+      keycloak:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -264,13 +287,16 @@ services:
     environment:
       <<: *common_env
       APP_KAFKA_SCHEMA_VALIDATION_ENABLED: "true"
+      JWT_ISSUER_URI: http://keycloak:8080/realms/sportsbetting
     depends_on:
       postgres:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+      keycloak:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/odds/event-001/HOME >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/actuator/health/readiness >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 10

@@ -16,8 +16,16 @@ curl -fsS -X POST "${BASE_URL}/providers/events" \
   -H "Content-Type: application/json" \
   -d '{"provider":"demo","eventType":"SPORT_EVENT","payload":{"eventId":"event-001","home":"HOME","away":"AWAY"}}' >/dev/null
 
+echo "Fetching access token from Keycloak (Docker: http://localhost:8090 by default)..."
+KEYCLOAK_TOKEN_URL="${KEYCLOAK_TOKEN_URL:-http://localhost:8090/realms/sportsbetting/protocol/openid-connect/token}"
+ACCESS_TOKEN="$(curl -sS -X POST "${KEYCLOAK_TOKEN_URL}" \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'grant_type=password&client_id=odds-gateway&username=feeder&password=feeder' \
+  | python -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')"
+
 echo "Sending odds feed..."
 curl -fsS -X POST "${BASE_URL}/odds-feed" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '[{"eventId":"event-001","selection":"HOME","odds":2.10}]' >/dev/null
 
