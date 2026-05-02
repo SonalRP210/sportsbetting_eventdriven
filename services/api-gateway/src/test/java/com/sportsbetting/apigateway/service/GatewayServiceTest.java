@@ -106,7 +106,7 @@ class GatewayServiceTest {
                 .andExpect(header("X-API-Key", "secret-key"))
                 .andRespond(withSuccess("ok", MediaType.APPLICATION_JSON));
 
-        DownstreamAuthHeaders creds = new DownstreamAuthHeaders("Bearer svc-token", "secret-key");
+        DownstreamAuthHeaders creds = new DownstreamAuthHeaders("Bearer svc-token", "secret-key", "X-API-Key");
         assertThat(service.oddsFeed("{}", creds).getBody()).isEqualTo("ok");
     }
 
