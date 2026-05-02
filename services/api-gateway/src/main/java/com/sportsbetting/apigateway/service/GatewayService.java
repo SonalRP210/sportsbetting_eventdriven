@@ -4,6 +4,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,6 @@ public class GatewayService {
     private final String bettingBaseUrl;
     private final String riskBaseUrl;
     private final String walletBaseUrl;
-    private final String authBaseUrl;
     private final String userBaseUrl;
     private final String ingestionBaseUrl;
     private final String settlementBaseUrl;
@@ -33,7 +33,6 @@ public class GatewayService {
             @Value("${gateway.routes.betting:http://betting-service:8084}") String bettingBaseUrl,
             @Value("${gateway.routes.risk:http://risk-service:8080}") String riskBaseUrl,
             @Value("${gateway.routes.wallet:http://wallet-service:8080}") String walletBaseUrl,
-            @Value("${gateway.routes.auth:http://auth-service:8080}") String authBaseUrl,
             @Value("${gateway.routes.user:http://user-service:8080}") String userBaseUrl,
             @Value("${gateway.routes.ingestion:http://event-ingestion-service:8080}") String ingestionBaseUrl,
             @Value("${gateway.routes.settlement:http://settlement-service:8080}") String settlementBaseUrl,
@@ -44,7 +43,6 @@ public class GatewayService {
         this.bettingBaseUrl = bettingBaseUrl;
         this.riskBaseUrl = riskBaseUrl;
         this.walletBaseUrl = walletBaseUrl;
-        this.authBaseUrl = authBaseUrl;
         this.userBaseUrl = userBaseUrl;
         this.ingestionBaseUrl = ingestionBaseUrl;
         this.settlementBaseUrl = settlementBaseUrl;
@@ -69,7 +67,6 @@ public class GatewayService {
                 "betting", bettingBaseUrl,
                 "risk", riskBaseUrl,
                 "wallet", walletBaseUrl,
-                "auth", authBaseUrl,
                 "user", userBaseUrl,
                 "ingestion", ingestionBaseUrl,
                 "settlement", settlementBaseUrl,
@@ -77,66 +74,82 @@ public class GatewayService {
         );
     }
 
-    public ResponseEntity<String> placeBet(String payload, String idempotencyKey) {
-        return forwardWithOptionalHeader(HttpMethod.POST, bettingBaseUrl + "/api/v1/bets", payload, idempotencyKey);
+    public ResponseEntity<String> placeBet(String payload, String idempotencyKey, DownstreamAuthHeaders downstreamAuth) {
+        return forwardWithOptionalHeader(
+                HttpMethod.POST, bettingBaseUrl + "/api/v1/bets", payload, idempotencyKey, downstreamAuth);
     }
 
-    public ResponseEntity<String> getBet(String betId) {
-        return forward(HttpMethod.GET, bettingBaseUrl + "/api/v1/bets/" + betId, null);
+    public ResponseEntity<String> getBet(String betId, DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.GET, bettingBaseUrl + "/api/v1/bets/" + betId, null, downstreamAuth);
     }
 
-    public ResponseEntity<String> cancelBet(String betId) {
-        return forward(HttpMethod.POST, bettingBaseUrl + "/api/v1/bets/" + betId + "/cancel", null);
+    public ResponseEntity<String> cancelBet(String betId, DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.POST, bettingBaseUrl + "/api/v1/bets/" + betId + "/cancel", null, downstreamAuth);
     }
 
     /** Same JSON contract as monolith: {@code List<OddsUpdate>}. */
-    public ResponseEntity<String> oddsFeed(String payload) {
-        return forward(HttpMethod.POST, oddsBaseUrl + "/api/v1/odds-feed", payload);
+    public ResponseEntity<String> oddsFeed(String payload, DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.POST, oddsBaseUrl + "/api/v1/odds-feed", payload, downstreamAuth);
     }
 
-    public ResponseEntity<String> userBets(String userId, int page, int size) {
-        return forward(HttpMethod.GET, bettingBaseUrl + "/api/v1/users/" + userId + "/bets?page=" + page + "&size=" + size, null);
+    public ResponseEntity<String> userBets(String userId, int page, int size, DownstreamAuthHeaders downstreamAuth) {
+        return forward(
+                HttpMethod.GET,
+                bettingBaseUrl + "/api/v1/users/" + userId + "/bets?page=" + page + "&size=" + size,
+                null,
+                downstreamAuth);
     }
 
-    public ResponseEntity<String> eventBets(String eventId, int page, int size) {
-        return forward(HttpMethod.GET, bettingBaseUrl + "/api/v1/events/" + eventId + "/bets?page=" + page + "&size=" + size, null);
+    public ResponseEntity<String> eventBets(String eventId, int page, int size, DownstreamAuthHeaders downstreamAuth) {
+        return forward(
+                HttpMethod.GET,
+                bettingBaseUrl + "/api/v1/events/" + eventId + "/bets?page=" + page + "&size=" + size,
+                null,
+                downstreamAuth);
     }
 
-    public ResponseEntity<String> userExposure(String userId) {
-        return forward(HttpMethod.GET, riskBaseUrl + "/api/v1/risk/users/" + userId, null);
+    public ResponseEntity<String> userExposure(String userId, DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.GET, riskBaseUrl + "/api/v1/risk/users/" + userId, null, downstreamAuth);
     }
 
-    public ResponseEntity<String> totalExposure() {
-        return forward(HttpMethod.GET, riskBaseUrl + "/api/v1/risk/total", null);
+    public ResponseEntity<String> totalExposure(DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.GET, riskBaseUrl + "/api/v1/risk/total", null, downstreamAuth);
     }
 
-    public ResponseEntity<String> settleEvent(String payload) {
-        return forward(HttpMethod.POST, settlementBaseUrl + "/api/v1/events/settlements", payload);
+    public ResponseEntity<String> settleEvent(String payload, DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.POST, settlementBaseUrl + "/api/v1/events/settlements", payload, downstreamAuth);
     }
 
-    public ResponseEntity<String> walletBalance(String userId) {
-        return forward(HttpMethod.GET, walletBaseUrl + "/api/v1/wallet/" + userId + "/balance", null);
+    public ResponseEntity<String> walletBalance(String userId, DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.GET, walletBaseUrl + "/api/v1/wallet/" + userId + "/balance", null, downstreamAuth);
     }
 
+    /**
+     * Login is not proxied to an in-repo auth microservice; use your IdP (OAuth2/OIDC) and
+     * {@code service-security} on downstream APIs. This endpoint keeps the route shape but returns {@code 501}.
+     */
     public ResponseEntity<String> login(String payload) {
-        return forward(HttpMethod.POST, authBaseUrl + "/api/v1/auth/login", payload);
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .body("{\"error\":\"AUTH_NOT_IMPLEMENTED\",\"message\":\"Use external IdP; stub auth-service was removed.\"}");
     }
 
-    public ResponseEntity<String> getUser(String userId) {
-        return forward(HttpMethod.GET, userBaseUrl + "/api/v1/users/" + userId, null);
+    public ResponseEntity<String> getUser(String userId, DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.GET, userBaseUrl + "/api/v1/users/" + userId, null, downstreamAuth);
     }
 
-    public ResponseEntity<String> upsertUser(String payload) {
-        return forward(HttpMethod.POST, userBaseUrl + "/api/v1/users", payload);
+    public ResponseEntity<String> upsertUser(String payload, DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.POST, userBaseUrl + "/api/v1/users", payload, downstreamAuth);
     }
 
-    public ResponseEntity<String> ingestProviderEvent(String payload) {
-        return forward(HttpMethod.POST, ingestionBaseUrl + "/api/v1/providers/events", payload);
+    public ResponseEntity<String> ingestProviderEvent(String payload, DownstreamAuthHeaders downstreamAuth) {
+        return forward(HttpMethod.POST, ingestionBaseUrl + "/api/v1/providers/events", payload, downstreamAuth);
     }
 
-    private ResponseEntity<String> forward(HttpMethod method, String url, String body) {
+    private ResponseEntity<String> forward(HttpMethod method, String url, String body, DownstreamAuthHeaders downstreamAuth) {
         try {
-            RestClient.RequestBodySpec spec = restClient.method(method).uri(url).header(HttpHeaders.CONTENT_TYPE, "application/json");
+            RestClient.RequestBodySpec spec = downstreamAuth.apply(
+                    restClient.method(method).uri(url).header(HttpHeaders.CONTENT_TYPE, "application/json"));
             RestClient.ResponseSpec response = (body == null)
                     ? spec.retrieve()
                     : spec.body(body).retrieve();
@@ -147,9 +160,16 @@ public class GatewayService {
         }
     }
 
-    private ResponseEntity<String> forwardWithOptionalHeader(HttpMethod method, String url, String body, String idempotencyKey) {
+    private ResponseEntity<String> forwardWithOptionalHeader(
+            HttpMethod method,
+            String url,
+            String body,
+            String idempotencyKey,
+            DownstreamAuthHeaders downstreamAuth
+    ) {
         try {
-            RestClient.RequestBodySpec spec = restClient.method(method).uri(url).header(HttpHeaders.CONTENT_TYPE, "application/json");
+            RestClient.RequestBodySpec spec = downstreamAuth.apply(
+                    restClient.method(method).uri(url).header(HttpHeaders.CONTENT_TYPE, "application/json"));
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
                 spec = spec.header("Idempotency-Key", idempotencyKey);
             }
