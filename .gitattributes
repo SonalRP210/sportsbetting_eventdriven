@@ -1,0 +1,2 @@
+# Bash used in CI must use LF (Windows checkouts otherwise break `set -eu` / functions).
+scripts/**/*.sh text eol=lf
