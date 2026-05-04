@@ -19,24 +19,44 @@
     {
       "username": "viewer",
       "enabled": true,
+      "email": "viewer@local.dev",
+      "firstName": "Viewer",
+      "lastName": "User",
+      "emailVerified": true,
+      "requiredActions": [],
       "credentials": [{"type": "password", "value": "viewer", "temporary": false}],
       "realmRoles": ["ODDS_READ", "BET_READ"]
     },
     {
       "username": "feeder",
       "enabled": true,
+      "email": "feeder@local.dev",
+      "firstName": "Feeder",
+      "lastName": "User",
+      "emailVerified": true,
+      "requiredActions": [],
       "credentials": [{"type": "password", "value": "feeder", "temporary": false}],
       "realmRoles": ["ODDS_READ", "ODDS_FEED_WRITE", "BET_READ", "BET_PLACE"]
     },
     {
       "username": "ops",
       "enabled": true,
+      "email": "ops@local.dev",
+      "firstName": "Ops",
+      "lastName": "User",
+      "emailVerified": true,
+      "requiredActions": [],
       "credentials": [{"type": "password", "value": "ops", "temporary": false}],
       "realmRoles": ["ODDS_READ", "ODDS_OPERATIONS", "BETTING_OPERATIONS", "BET_READ", "BET_PLACE"]
     },
     {
       "username": "admin",
       "enabled": true,
+      "email": "admin@local.dev",
+      "firstName": "Admin",
+      "lastName": "User",
+      "emailVerified": true,
+      "requiredActions": [],
       "credentials": [{"type": "password", "value": "admin", "temporary": false}],
       "realmRoles": ["ODDS_ADMIN", "ODDS_READ", "ODDS_FEED_WRITE", "ODDS_OPERATIONS", "BETTING_ADMIN", "BET_READ", "BET_PLACE", "BETTING_OPERATIONS"]
     }

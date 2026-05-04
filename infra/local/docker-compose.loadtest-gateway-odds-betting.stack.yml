@@ -1,0 +1,321 @@
+# Standalone stack: gateway + odds + betting + infra + Debezium + Prometheus/Grafana.
+# Only images/services listed here are part of this project — use this file alone (no main docker-compose.yml).
+#
+# From repo root:
+#   docker compose -f infra/local/docker-compose.loadtest-gateway-odds-betting.stack.yml up -d
+#   docker compose -f infra/local/docker-compose.loadtest-gateway-odds-betting.stack.yml down -v --remove-orphans
+#
+# Metrics: use host URLs in a browser — http://localhost:8094/actuator/prometheus (betting),
+# http://localhost:8085/actuator/prometheus (odds). Hostname "betting-service" only resolves inside the Docker network.
+#
+# First-time startup is dominated by: (1) Maven Docker builds for gateway/odds/betting — run
+#   docker compose -f infra/local/docker-compose.loadtest-gateway-odds-betting.stack.yml build --parallel
+#   before `up -d` so builds are visible and parallelized; (2) Keycloak realm import; (3) JVM warm-up for
+#   Debezium Connect and Spring Boot. Healthchecks use start_period so slow boots do not flip to "unhealthy".
+#
+# Do not run this at the same time as the full infra/local/docker-compose.yml stack if host ports overlap.
+
+name: sportsbetting-loadtest-gob
+
+x-common-env: &common_env
+  SPRING_PROFILES_ACTIVE: docker
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/sportsbetting
+  SPRING_DATASOURCE_USERNAME: sportsbetting
+  SPRING_DATASOURCE_PASSWORD: sportsbetting
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+  APP_KAFKA_CONSUMER_MAX_ATTEMPTS: 3
+  APP_KAFKA_CONSUMER_BACKOFF_MS: 1000
+  APP_KAFKA_DLT_SUFFIX: .dlq
+  SCHEMA_REGISTRY_URL: http://schema-registry:8081
+  APP_KAFKA_SCHEMA_VALIDATION_ENABLED: "false"
+  GATEWAY_OIDC_TOKEN_ENDPOINT: http://keycloak:8080/realms/sportsbetting/protocol/openid-connect/token
+  GATEWAY_OIDC_CLIENT_ID: odds-gateway
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: sb-lt-keycloak
+    restart: unless-stopped
+    command: ["start-dev", "--http-port=8080", "--import-realm"]
+    ports:
+      - "8090:8080"
+      # Keycloak 26+ exposes health on management port 9000 (see https://www.keycloak.org/observability/health)
+      - "9001:9000"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ../keycloak/sportsbetting-realm.json:/opt/keycloak/data/import/sportsbetting-realm.json:ro
+    healthcheck:
+      # KC 26: readiness on management port 9000; image has bash but not curl/wget (Keycloak docs).
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000 && printf \"HEAD /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && head -1 <&3 | grep -q 200'",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 48
+      start_period: 180s
+
+  keycloak-dev-user-fix:
+    image: alpine:3.20
+    container_name: sb-lt-keycloak-dev-user-fix
+    restart: "no"
+    environment:
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ../keycloak/scripts/fix-keycloak-dev-users.sh:/fix.sh:ro
+    # Strip CR so Windows CRLF bind mounts do not break ash (exit 2 on stray \r).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "tr -d '\\r' < /fix.sh > /tmp/fix.lf && exec /bin/sh /tmp/fix.lf"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sb-lt-postgres
+    restart: unless-stopped
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_replication_slots=10
+      -c max_wal_senders=10
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: sportsbetting
+      POSTGRES_USER: sportsbetting
+      POSTGRES_PASSWORD: sportsbetting
+    volumes:
+      - ../../data/postgres/scripts/init-schemas.sql:/docker-entrypoint-initdb.d/01-init-schemas.sql:ro
+      - ../../data/postgres/scripts/grants.sql:/docker-entrypoint-initdb.d/02-grants.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sportsbetting -d sportsbetting"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  redpanda:
+    image: redpandadata/redpanda:v24.1.6
+    container_name: sb-lt-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --reserve-memory
+      - "0M"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092
+    ports:
+      - "19092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk topic list --brokers localhost:9092 >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.5
+    container_name: sb-lt-schema-registry
+    restart: unless-stopped
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "18081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: redpanda:9092
+
+  kafka-init:
+    image: redpandadata/redpanda:v24.1.6
+    container_name: sb-lt-kafka-init
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    volumes:
+      - ./kafka/init-topics.sh:/init-topics.sh:ro
+    entrypoint: ["/bin/bash", "/init-topics.sh"]
+
+  debezium-connect:
+    image: quay.io/debezium/connect:2.7.4.Final
+    container_name: sb-lt-debezium-connect
+    restart: unless-stopped
+    ports:
+      - "8093:8083"
+    environment:
+      BOOTSTRAP_SERVERS: redpanda:9092
+      GROUP_ID: debezium-connect-group-lt
+      CONFIG_STORAGE_TOPIC: debezium.connect.configs.lt
+      OFFSET_STORAGE_TOPIC: debezium.connect.offsets.lt
+      STATUS_STORAGE_TOPIC: debezium.connect.status.lt
+      CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      STATUS_STORAGE_REPLICATION_FACTOR: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8083/connectors >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
+
+  # One-shot: registers connectors then exits 0. Docker Desktop shows "Exited" — that is success, not a crash.
+  debezium-init:
+    image: curlimages/curl:latest
+    container_name: sb-lt-debezium-init
+    restart: on-failure
+    depends_on:
+      debezium-connect:
+        condition: service_healthy
+    volumes:
+      - ./debezium/register-connector.sh:/register.sh:ro
+      - ./debezium/odds-outbox-connector.json:/odds-outbox-connector.json:ro
+      - ./debezium/betting-outbox-connector.json:/betting-outbox-connector.json:ro
+    entrypoint: ["/bin/sh", "/register.sh"]
+
+  odds-service:
+    build: { context: ../.., dockerfile: services/odds-service/Dockerfile }
+    container_name: sb-lt-odds-service
+    restart: unless-stopped
+    ports:
+      - "8085:8080"
+    environment:
+      <<: *common_env
+      APP_KAFKA_SCHEMA_VALIDATION_ENABLED: "true"
+      JWT_ISSUER_URI: http://keycloak:8080/realms/sportsbetting
+      # This stack has no scrape token; disable HTTP security so Prometheus can pull /actuator/prometheus.
+      APP_SECURITY_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      keycloak-dev-user-fix:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/actuator/health/readiness >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 180s
+
+  betting-service:
+    build: { context: ../.., dockerfile: services/betting-service/Dockerfile }
+    container_name: sb-lt-betting-service
+    restart: unless-stopped
+    ports:
+      - "8094:8084"
+    environment:
+      <<: *common_env
+      APP_KAFKA_SCHEMA_VALIDATION_ENABLED: "true"
+      JWT_ISSUER_URI: http://keycloak:8080/realms/sportsbetting
+      APP_SECURITY_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      keycloak-dev-user-fix:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/actuator/health/readiness >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 180s
+
+  api-gateway:
+    build: { context: ../.., dockerfile: services/api-gateway/Dockerfile }
+    container_name: sb-lt-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8070:8080"
+    environment:
+      <<: *common_env
+      # Allow high RPS load tests from one host (default gateway cap is 300/min per IP+URI).
+      GATEWAY_RATE_LIMIT_REQUESTS_PER_MINUTE: "0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      schema-registry:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+      keycloak-dev-user-fix:
+        condition: service_completed_successfully
+      odds-service:
+        condition: service_started
+      betting-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 180s
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: sb-lt-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../../observability/prometheus/prometheus.loadtest-gateway-odds-betting.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      api-gateway:
+        condition: service_started
+      odds-service:
+        condition: service_started
+      betting-service:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:11.1.5
+    container_name: sb-lt-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ../../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started

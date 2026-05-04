@@ -6,7 +6,7 @@ CONNECT_URL="http://debezium-connect:8083"
 
 echo "Waiting for Kafka Connect to be ready..."
 until curl -sf "$CONNECT_URL/connectors" > /dev/null 2>&1; do
-  echo "  Kafka Connect not ready yet — retrying in 5s..."
+  echo "  Kafka Connect not ready yet - retrying in 5s..."
   sleep 5
 done
 
@@ -16,7 +16,7 @@ register_if_missing() {
   echo "Checking connector '${CONNECTOR_NAME}'..."
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$CONNECT_URL/connectors/${CONNECTOR_NAME}")
   if [ "$STATUS" = "200" ]; then
-    echo "  Connector '${CONNECTOR_NAME}' already registered — skipping."
+    echo "  Connector '${CONNECTOR_NAME}' already registered - skipping."
   else
     echo "  Registering '${CONNECTOR_NAME}'..."
     RESULT=$(curl -s -X POST "$CONNECT_URL/connectors" \

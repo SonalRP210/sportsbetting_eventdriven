@@ -4,6 +4,8 @@ services:
   # still lack new roles, remove the Keycloak container (and any attached volume) so import runs again:
   #   docker compose rm -sf keycloak && docker compose up -d keycloak
   # Or update roles in the Admin UI. See README "Local Keycloak and realm import".
+  #
+  # keycloak-dev-user-fix: one-shot Admin API patch so password grant works (no "Account is not fully set up").
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     container_name: sb-keycloak
@@ -11,17 +13,42 @@ services:
     command: ["start-dev", "--http-port=8080", "--import-realm"]
     ports:
       - "8090:8080"
+      - "9001:9000"
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
     volumes:
       - ../keycloak/sportsbetting-realm.json:/opt/keycloak/data/import/sportsbetting-realm.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health/ready || exit 1"]
-      interval: 10s
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000 && printf \"HEAD /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && head -1 <&3 | grep -q 200'",
+        ]
+      interval: 5s
       timeout: 5s
-      retries: 35
-      start_period: 90s
+      retries: 48
+      start_period: 180s
+
+  keycloak-dev-user-fix:
+    image: alpine:3.20
+    container_name: sb-keycloak-dev-user-fix
+    restart: "no"
+    environment:
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ../keycloak/scripts/fix-keycloak-dev-users.sh:/fix.sh:ro
+    # Strip CR so Windows CRLF bind mounts do not break ash (exit 2 on stray \r).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - "tr -d '\\r' < /fix.sh > /tmp/fix.lf && exec /bin/sh /tmp/fix.lf"
+    depends_on:
+      keycloak:
+        condition: service_healthy
 
   postgres:
     image: postgres:16-alpine
@@ -100,7 +127,8 @@ services:
     entrypoint: ["/bin/bash", "/init-topics.sh"]
 
   debezium-connect:
-    image: debezium/connect:2.7
+    # Full semver tag required (e.g. 2.7 is not published). Quay is Debezium's primary registry.
+    image: quay.io/debezium/connect:2.7.4.Final
     container_name: sb-debezium-connect
     restart: unless-stopped
     ports:
@@ -228,6 +256,8 @@ services:
         condition: service_started
       keycloak:
         condition: service_healthy
+      keycloak-dev-user-fix:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/v1/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -284,6 +314,8 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      keycloak-dev-user-fix:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/actuator/health/readiness >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -306,6 +338,8 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      keycloak-dev-user-fix:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/actuator/health/readiness >/dev/null 2>&1 || exit 1"]
       interval: 30s

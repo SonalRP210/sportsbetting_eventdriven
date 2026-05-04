@@ -1,2 +1,4 @@
-# Bash used in CI must use LF (Windows checkouts otherwise break `set -eu` / functions).
+# Bash/sh used in CI and Docker bind mounts must use LF (Windows CRLF breaks Linux shells).
 scripts/**/*.sh text eol=lf
+infra/local/**/*.sh text eol=lf
+infra/keycloak/**/*.sh text eol=lf

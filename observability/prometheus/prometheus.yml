@@ -4,23 +4,60 @@ global:
   scrape_timeout: 10s
 
 scrape_configs:
+  # Each target gets a stable `service` label for Grafana per-microservice dashboards (see sportsbetting-loadtest-event-platform).
   - job_name: 'sportsbetting-services'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets:
-          - 'host.docker.internal:18089'
-          - 'api-gateway:8080'
-          - 'user-service:8080'
-          - 'wallet-service:8080'
-          - 'betting-service:8084'
-          - 'odds-service:8080'
-          - 'event-ingestion-service:8080'
-          - 'settlement-service:8080'
-          - 'notification-service:8080'
-          - 'risk-service:8080'
+      - targets: ['host.docker.internal:18089']
         labels:
           application: 'sportsbetting'
           environment: 'loadtest'
+          service: 'risk-service'
+      - targets: ['api-gateway:8080']
+        labels:
+          application: 'sportsbetting'
+          environment: 'loadtest'
+          service: 'api-gateway'
+      - targets: ['user-service:8080']
+        labels:
+          application: 'sportsbetting'
+          environment: 'loadtest'
+          service: 'user-service'
+      - targets: ['wallet-service:8080']
+        labels:
+          application: 'sportsbetting'
+          environment: 'loadtest'
+          service: 'wallet-service'
+      - targets: ['betting-service:8084']
+        labels:
+          application: 'sportsbetting'
+          environment: 'loadtest'
+          service: 'betting-service'
+      - targets: ['odds-service:8080']
+        labels:
+          application: 'sportsbetting'
+          environment: 'loadtest'
+          service: 'odds-service'
+      - targets: ['event-ingestion-service:8080']
+        labels:
+          application: 'sportsbetting'
+          environment: 'loadtest'
+          service: 'event-ingestion-service'
+      - targets: ['settlement-service:8080']
+        labels:
+          application: 'sportsbetting'
+          environment: 'loadtest'
+          service: 'settlement-service'
+      - targets: ['notification-service:8080']
+        labels:
+          application: 'sportsbetting'
+          environment: 'loadtest'
+          service: 'notification-service'
+      - targets: ['risk-service:8080']
+        labels:
+          application: 'sportsbetting'
+          environment: 'loadtest'
+          service: 'risk-service'
 
   - job_name: 'redpanda'
     metrics_path: '/public_metrics'

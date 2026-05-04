@@ -1,0 +1,43 @@
+# Prefer the standalone file (Docker Desktop / pulls only what you need):
+#   infra/local/docker-compose.loadtest-gateway-odds-betting.stack.yml
+#
+# This file is only for merging with docker-compose.yml when you want the full repo compose
+# plus narrowed gateway/prometheus depends_on.
+#
+# Slim stack: gateway → odds-service + betting-service (+ infra, Debezium, Prometheus/Grafana).
+#
+#   docker compose -f infra/local/docker-compose.yml -f infra/local/docker-compose.loadtest-gateway-odds-betting.yml up -d \
+#     postgres redpanda schema-registry kafka-init keycloak \
+#     debezium-connect debezium-init \
+#     odds-service betting-service api-gateway \
+#     prometheus grafana
+#
+# Base compose ties api-gateway and prometheus to every microservice; this file replaces those
+# `depends_on` blocks so only the services you start are required.
+
+services:
+  api-gateway:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      schema-registry:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+      keycloak-dev-user-fix:
+        condition: service_completed_successfully
+      odds-service:
+        condition: service_started
+      betting-service:
+        condition: service_started
+
+  prometheus:
+    depends_on:
+      api-gateway:
+        condition: service_started
+      odds-service:
+        condition: service_started
+      betting-service:
+        condition: service_started

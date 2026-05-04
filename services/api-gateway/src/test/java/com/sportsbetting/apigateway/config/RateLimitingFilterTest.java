@@ -14,7 +14,7 @@ class RateLimitingFilterTest {
 
     @Test
     void returns429AfterBurstOnSameKey() throws ServletException, IOException {
-        RateLimitingFilter filter = new RateLimitingFilter();
+        RateLimitingFilter filter = new RateLimitingFilter(300);
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr("10.0.0.1");
         request.setRequestURI("/api/v1/gateway/health");
@@ -32,7 +32,7 @@ class RateLimitingFilterTest {
 
     @Test
     void differentUrisAreBucketedSeparately() throws ServletException, IOException {
-        RateLimitingFilter filter = new RateLimitingFilter();
+        RateLimitingFilter filter = new RateLimitingFilter(300);
         FilterChain chain = (req, res) -> {};
 
         MockHttpServletRequest a = new MockHttpServletRequest();
@@ -48,5 +48,20 @@ class RateLimitingFilterTest {
         MockHttpServletResponse rb = new MockHttpServletResponse();
         filter.doFilterInternal(b, rb, chain);
         assertThat(rb.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void disabledWhenLimitIsZero() throws ServletException, IOException {
+        RateLimitingFilter filter = new RateLimitingFilter(0);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("10.0.0.3");
+        request.setRequestURI("/api/v1/odds-feed");
+        FilterChain chain = (req, res) -> {};
+
+        for (int i = 0; i < 500; i++) {
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            filter.doFilterInternal(request, response, chain);
+            assertThat(response.getStatus()).isEqualTo(200);
+        }
     }
 }
