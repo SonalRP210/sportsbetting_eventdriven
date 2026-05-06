@@ -1,0 +1,17 @@
+# Snippet for HashiCorp Vault Agent Injector annotations on the odds-service Pod.
+# Merge into your Deployment metadata/spec; values are placeholders — see
+# https://developer.hashicorp.com/vault/docs/platform/k8s/injector
+#
+# metadata:
+#   annotations:
+#     vault.hashicorp.com/agent-inject: "true"
+#     vault.hashicorp.com/role: "odds-service"
+#     vault.hashicorp.com/agent-inject-secret-config.properties: "secret/data/odds-service/production"
+#     vault.hashicorp.com/agent-inject-template-config.properties: |
+#       {{- with secret "secret/data/odds-service/production" -}}
+#       SPRING_DATASOURCE_PASSWORD={{ .Data.data.SPRING_DATASOURCE_PASSWORD }}
+#       APP_SECURITY_API_KEY={{ .Data.data.APP_SECURITY_API_KEY }}
+#       {{- end }}
+#
+# For TLS (Vault PKI), add templates that write PEM files under /vault/secrets/ and reference them from
+# spring.ssl.bundle.pem.* / server.ssl.* (docs/platform/vault-integration.md).

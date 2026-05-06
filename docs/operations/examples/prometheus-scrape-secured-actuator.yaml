@@ -1,0 +1,30 @@
+# Fragment: scrape Spring Boot actuator /actuator/prometheus when service-security is enabled.
+# Merge into prometheus.yml scrape_configs or translate to PodMonitor/ServiceMonitor (Prometheus Operator).
+#
+# Options:
+# 1) bearer_token_file — mount a short-lived token (e.g. Kubernetes projected SA token or IdP client-credentials file).
+# 2) oauth2 — Prometheus 2.33+ client credentials against your token endpoint (see upstream Prometheus docs).
+# 3) Run Prometheus inside the mesh with injected identity so the scrape is mTLS and policies allow /actuator/prometheus only from the monitoring namespace.
+#
+# Use a dedicated scrape ServiceAccount + RBAC if you mint tokens via Kubernetes; scope that SA to read-only metrics.
+
+scrape_configs:
+  - job_name: sportsbetting-odds-actuator
+    metrics_path: /actuator/prometheus
+    scheme: http
+    bearer_token_file: /etc/prometheus/secrets/odds-scrape/token
+    static_configs:
+      - targets: ["odds-service:8080"]
+        labels:
+          application: sportsbetting
+          service: odds-service
+
+  - job_name: sportsbetting-betting-actuator
+    metrics_path: /actuator/prometheus
+    scheme: http
+    bearer_token_file: /etc/prometheus/secrets/betting-scrape/token
+    static_configs:
+      - targets: ["betting-service:8084"]
+        labels:
+          application: sportsbetting
+          service: betting-service

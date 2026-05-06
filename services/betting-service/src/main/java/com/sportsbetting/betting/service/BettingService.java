@@ -15,7 +15,9 @@ import com.sportsbetting.betting.model.OutboxEventEntity;
 import com.sportsbetting.betting.repository.BetRepository;
 import com.sportsbetting.betting.repository.OddsQuoteRepository;
 import com.sportsbetting.betting.repository.OutboxEventRepository;
+import com.sportsbetting.platform.messaging.EventPayloadValidator;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,16 +39,19 @@ public class BettingService {
     private final OddsQuoteRepository oddsQuoteRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final ObjectProvider<EventPayloadValidator> eventSchemaValidator;
 
     public BettingService(
             BetRepository betRepository,
             OddsQuoteRepository oddsQuoteRepository,
             OutboxEventRepository outboxEventRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ObjectProvider<EventPayloadValidator> eventSchemaValidator) {
         this.betRepository = betRepository;
         this.oddsQuoteRepository = oddsQuoteRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.objectMapper = objectMapper.copy();
+        this.eventSchemaValidator = eventSchemaValidator;
     }
 
     @Transactional
@@ -92,15 +97,18 @@ public class BettingService {
         betRepository.save(bet);
 
         BigDecimal openRisk = money(bet.getStake().multiply(bet.getOdds()));
-        persistOutbox("betting.bet.placed.v1", Map.of(
-                "betId", bet.getBetId(),
-                "userId", bet.getUserId(),
-                "eventId", bet.getEventId(),
-                "selection", bet.getSelection(),
-                "stake", bet.getStake(),
-                "odds", bet.getOdds(),
-                "openRisk", openRisk
-        ));
+        persistOutbox(
+                bet.getBetId(),
+                "betting.bet.placed.v1",
+                Map.of(
+                        "betId", bet.getBetId(),
+                        "userId", bet.getUserId(),
+                        "eventId", bet.getEventId(),
+                        "selection", bet.getSelection(),
+                        "stake", bet.getStake(),
+                        "odds", bet.getOdds(),
+                        "openRisk", openRisk
+                ));
 
         return new PlaceBetResponse(bet.getBetId(), bet.getOdds(), bet.getStatus().name());
     }
@@ -146,11 +154,14 @@ public class BettingService {
         betRepository.save(bet);
 
         BigDecimal openRisk = money(bet.getStake().multiply(bet.getOdds()));
-        persistOutbox("betting.bet.cancelled.v1", Map.of(
-                "betId", bet.getBetId(),
-                "userId", bet.getUserId(),
-                "openRisk", openRisk
-        ));
+        persistOutbox(
+                bet.getBetId(),
+                "betting.bet.cancelled.v1",
+                Map.of(
+                        "betId", bet.getBetId(),
+                        "userId", bet.getUserId(),
+                        "openRisk", openRisk
+                ));
 
         return new CancelBetResponse(bet.getBetId(), bet.getStatus().name(), "Bet cancelled");
     }
@@ -158,6 +169,25 @@ public class BettingService {
     @Transactional(readOnly = true)
     public List<DomainEvent> outboxEvents() {
         return outboxEventRepository.findAll().stream().map(this::toDomainEvent).toList();
+    }
+
+    /**
+     * Projects {@code settlement.event.settled.v1} onto local bets: OPEN positions become WON or LOST.
+     */
+    @Transactional
+    public void applyEventSettlement(String eventId, String winningSelection) {
+        if (eventId == null || eventId.isBlank() || winningSelection == null || winningSelection.isBlank()) {
+            throw new IllegalArgumentException("eventId and winningSelection are required");
+        }
+        List<BetEntity> openBets = betRepository.findByEventIdAndStatus(eventId, BetStatus.OPEN);
+        for (BetEntity bet : openBets) {
+            if (winningSelection.equals(bet.getSelection())) {
+                bet.setStatus(BetStatus.WON);
+            } else {
+                bet.setStatus(BetStatus.LOST);
+            }
+            betRepository.save(bet);
+        }
     }
 
     @Transactional
@@ -184,11 +214,14 @@ public class BettingService {
         return input.subList(from, to);
     }
 
-    private void persistOutbox(String eventType, Map<String, Object> payload) {
+    private void persistOutbox(String messageKey, String eventType, Map<String, Object> payload) {
+        String json = writeJson(payload);
+        eventSchemaValidator.ifAvailable(v -> v.validateIfPresent(eventType, json));
         OutboxEventEntity row = new OutboxEventEntity();
         row.setId(UUID.randomUUID());
         row.setEventType(eventType);
-        row.setPayload(writeJson(payload));
+        row.setPayload(json);
+        row.setMessageKey(messageKey);
         row.setPublished(false);
         row.setCreatedAt(Instant.now());
         outboxEventRepository.save(row);

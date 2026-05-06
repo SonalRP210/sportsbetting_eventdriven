@@ -3,6 +3,7 @@ package com.sportsbetting.apigateway.controller;
 import com.sportsbetting.apigateway.config.RateLimitingFilter;
 import com.sportsbetting.apigateway.config.RequestCorrelationFilter;
 import com.sportsbetting.apigateway.error.GlobalExceptionHandler;
+import com.sportsbetting.apigateway.service.DownstreamAuthHeaders;
 import com.sportsbetting.apigateway.service.GatewayService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -46,7 +49,7 @@ class GatewayWebMvcSliceTest {
 
     @Test
     void globalHandlerMapsIllegalArgument() throws Exception {
-        when(gatewayService.getUser("missing-user"))
+        when(gatewayService.getUser(eq("missing-user"), any(DownstreamAuthHeaders.class)))
                 .thenThrow(new IllegalArgumentException("Invalid user id"));
         mockMvc.perform(get("/api/v1/users/missing-user"))
                 .andExpect(status().isUnprocessableEntity());

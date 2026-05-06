@@ -1,0 +1,809 @@
+asyncapi: 2.6.0
+
+info:
+  title: SportsBetting Platform — Kafka Event Catalog
+  version: 1.0.0
+  description: |
+    Formal contract for every Kafka topic used by the SportsBetting
+    event-driven platform. This document is the single source of truth
+    for event producers and consumers.
+
+    **Serialisation**: All payloads are JSON.
+    **Validation**:
+    - Producer-side — each service validates the outbox payload against the
+      shared JSON Schema in `shared/contracts/events/v1/` before writing to
+      the outbox table.
+    - Consumer-side — payload is re-validated on receipt; invalid messages are
+      forwarded to the topic's DLQ after all retries are exhausted.
+
+    **Naming convention**: `<domain>.<entity>.<event>.v<N>` (e.g. `betting.bet.placed.v1`).
+    The odds-service topic is an exception: `odds.updated.v1` (domain = entity).
+
+    **Outbox relay**:
+    - `odds.updated.v1` is produced via the **Debezium CDC outbox relay**.
+      The odds-service writes atomically to `odds.outbox_events` (Postgres).
+      Debezium reads the WAL and the Outbox Event Router SMT routes each row
+      to the Kafka topic named by the `event_type` column.  No polling.
+    - All other services use a transactional outbox with a scheduled poller
+      until Debezium is extended to cover them.
+
+    **DLQ pattern**: every primary topic `X` has a paired `X.dlq` topic.
+    Failed messages carry the original headers plus:
+    - `x-exception-message` — last exception string
+    - `x-original-topic` — source topic name
+    - `x-retry-count` — number of retries attempted
+
+    **Broker**: Redpanda 23.x (Kafka-protocol, KRaft mode, no ZooKeeper).
+    Local dev: `localhost:19092`.  Partition count: 3, replicas: 1 (local dev).
+
+  contact:
+    name: Platform Team
+  license:
+    name: MIT
+
+servers:
+  redpanda-local:
+    url: localhost:19092
+    protocol: kafka
+    description: Local Redpanda broker running inside Docker Compose
+
+defaultContentType: application/json
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CHANNELS
+# Each channel = one Kafka topic.  subscribe = apps outside this platform can
+# subscribe to receive events the platform emits.
+# ──────────────────────────────────────────────────────────────────────────────
+channels:
+
+  # ── ODDS SERVICE ─────────────────────────────────────────────────────────────
+
+  odds.updated.v1:
+    description: |
+      Published when an operator sets or changes the odds for an event/selection.
+
+      **Relay**: odds-service → `odds.outbox_events` (Postgres) → Debezium
+      EventRouter SMT → this topic.  The Java service writes no Kafka code;
+      Debezium is the sole Kafka producer for this topic.
+
+      **Partition key**: outbox row UUID (guarantees FIFO per event/selection pair
+      when odds messages for the same event are sent in quick succession).
+    bindings:
+      kafka:
+        topic: odds.updated.v1
+        partitions: 3
+        replicas: 1
+        x-configs:
+          retention.ms: "604800000"        # 7 days
+          cleanup.policy: delete
+    subscribe:
+      summary: Odds price was set or changed
+      operationId: onOddsUpdated
+      x-producers:
+        - service: odds-service
+          relay: Debezium PostgresConnector + Outbox Event Router SMT
+      x-consumers:
+        - service: betting-service
+          purpose: Cache the latest quote for instant bet pricing
+      tags:
+        - name: odds-service
+        - name: betting-service
+      message:
+        $ref: '#/components/messages/OddsUpdatedV1'
+
+  odds.updated.v1.dlq:
+    description: |
+      Dead-letter queue for `odds.updated.v1`.
+      Receives messages that failed all consumer retries (e.g. deserialization
+      error, downstream DB unavailable).
+    bindings:
+      kafka:
+        topic: odds.updated.v1.dlq
+        x-dlq-for: odds.updated.v1
+    subscribe:
+      summary: Failed odds.updated.v1 message
+      operationId: onOddsUpdatedDlq
+      message:
+        $ref: '#/components/messages/OddsUpdatedV1'
+
+  # ── BETTING SERVICE ───────────────────────────────────────────────────────────
+
+  betting.bet.placed.v1:
+    description: |
+      Published when a punter's bet is validated, priced, and accepted.
+      Triggers stake deduction, risk exposure tracking, and user notification.
+
+      **Partition key**: `betId` — all lifecycle events for the same bet land on
+      the same partition.
+    bindings:
+      kafka:
+        topic: betting.bet.placed.v1
+        partitions: 3
+        replicas: 1
+        x-configs:
+          retention.ms: "2592000000"       # 30 days (audit requirement)
+          cleanup.policy: delete
+    subscribe:
+      summary: A bet was placed by a punter
+      operationId: onBetPlaced
+      x-producers:
+        - service: betting-service
+      x-consumers:
+        - service: risk-service
+          purpose: Update liability exposure for the event/selection
+        - service: wallet-service
+          purpose: Debit the punter's stake from their wallet
+        - service: notification-service
+          purpose: Send bet confirmation to the punter
+      tags:
+        - name: betting-service
+        - name: risk-service
+        - name: wallet-service
+        - name: notification-service
+      message:
+        $ref: '#/components/messages/BetPlacedV1'
+
+  betting.bet.placed.v1.dlq:
+    description: Dead-letter queue for `betting.bet.placed.v1`.
+    bindings:
+      kafka:
+        topic: betting.bet.placed.v1.dlq
+        x-dlq-for: betting.bet.placed.v1
+    subscribe:
+      summary: Failed bet-placed message
+      operationId: onBetPlacedDlq
+      message:
+        $ref: '#/components/messages/BetPlacedV1'
+
+  betting.bet.cancelled.v1:
+    description: |
+      Published when a punter cancels a bet within the allowed cancellation window.
+      Triggers stake refund and risk exposure recalculation.
+    bindings:
+      kafka:
+        topic: betting.bet.cancelled.v1
+        partitions: 3
+        replicas: 1
+    subscribe:
+      summary: A bet was cancelled by the punter
+      operationId: onBetCancelled
+      x-producers:
+        - service: betting-service
+      x-consumers:
+        - service: risk-service
+          purpose: Reverse the liability exposure
+        - service: wallet-service
+          purpose: Refund the stake to the punter's wallet
+      tags:
+        - name: betting-service
+        - name: risk-service
+        - name: wallet-service
+      message:
+        $ref: '#/components/messages/BetCancelledV1'
+
+  betting.bet.cancelled.v1.dlq:
+    description: Dead-letter queue for `betting.bet.cancelled.v1`.
+    bindings:
+      kafka:
+        topic: betting.bet.cancelled.v1.dlq
+        x-dlq-for: betting.bet.cancelled.v1
+    subscribe:
+      summary: Failed bet-cancelled message
+      operationId: onBetCancelledDlq
+      message:
+        $ref: '#/components/messages/BetCancelledV1'
+
+  # ── SETTLEMENT SERVICE ────────────────────────────────────────────────────────
+
+  settlement.event.settled.v1:
+    description: |
+      Published when a sporting event result is declared and all open bets on
+      that event are settled (WON / LOST / VOID).
+
+      **Partition key**: `betId` — consumers can process each bet independently.
+    bindings:
+      kafka:
+        topic: settlement.event.settled.v1
+        partitions: 3
+        replicas: 1
+        x-configs:
+          retention.ms: "2592000000"       # 30 days
+          cleanup.policy: delete
+    subscribe:
+      summary: A bet was settled after the sporting event concluded
+      operationId: onEventSettled
+      x-producers:
+        - service: settlement-service
+      x-consumers:
+        - service: wallet-service
+          purpose: Credit winnings to the punter's wallet (WON bets)
+        - service: notification-service
+          purpose: Notify the punter of their result
+        - service: betting-service
+          purpose: Mark the bet record as settled
+      tags:
+        - name: settlement-service
+        - name: wallet-service
+        - name: notification-service
+        - name: betting-service
+      message:
+        $ref: '#/components/messages/BetSettledV1'
+
+  settlement.event.settled.v1.dlq:
+    description: Dead-letter queue for `settlement.event.settled.v1`.
+    bindings:
+      kafka:
+        topic: settlement.event.settled.v1.dlq
+        x-dlq-for: settlement.event.settled.v1
+    subscribe:
+      summary: Failed settlement message
+      operationId: onEventSettledDlq
+      message:
+        $ref: '#/components/messages/BetSettledV1'
+
+  # ── WALLET SERVICE ────────────────────────────────────────────────────────────
+
+  wallet.wallet.credited.v1:
+    description: |
+      Published when a user's wallet balance increases (winning payout or deposit).
+    bindings:
+      kafka:
+        topic: wallet.wallet.credited.v1
+        partitions: 3
+        replicas: 1
+    subscribe:
+      summary: A user's wallet was credited
+      operationId: onWalletCredited
+      x-producers:
+        - service: wallet-service
+      x-consumers:
+        - service: notification-service
+          purpose: Notify the user of the credit
+      tags:
+        - name: wallet-service
+        - name: notification-service
+      message:
+        $ref: '#/components/messages/WalletCreditedV1'
+
+  wallet.wallet.credited.v1.dlq:
+    description: Dead-letter queue for `wallet.wallet.credited.v1`.
+    bindings:
+      kafka:
+        topic: wallet.wallet.credited.v1.dlq
+        x-dlq-for: wallet.wallet.credited.v1
+    subscribe:
+      summary: Failed wallet-credited message
+      operationId: onWalletCreditedDlq
+      message:
+        $ref: '#/components/messages/WalletCreditedV1'
+
+  wallet.wallet.debited.v1:
+    description: |
+      Published when a user's wallet balance decreases (stake deducted or withdrawal).
+    bindings:
+      kafka:
+        topic: wallet.wallet.debited.v1
+        partitions: 3
+        replicas: 1
+    subscribe:
+      summary: A user's wallet was debited
+      operationId: onWalletDebited
+      x-producers:
+        - service: wallet-service
+      x-consumers:
+        - service: notification-service
+          purpose: Notify the user of the debit
+      tags:
+        - name: wallet-service
+        - name: notification-service
+      message:
+        $ref: '#/components/messages/WalletDebitedV1'
+
+  wallet.wallet.debited.v1.dlq:
+    description: Dead-letter queue for `wallet.wallet.debited.v1`.
+    bindings:
+      kafka:
+        topic: wallet.wallet.debited.v1.dlq
+        x-dlq-for: wallet.wallet.debited.v1
+    subscribe:
+      summary: Failed wallet-debited message
+      operationId: onWalletDebitedDlq
+      message:
+        $ref: '#/components/messages/WalletDebitedV1'
+
+  # ── RISK SERVICE ──────────────────────────────────────────────────────────────
+
+  risk.exposure.updated.v1:
+    description: |
+      Published when the risk engine recalculates liability exposure for an
+      event/selection after a bet is placed or cancelled.
+
+      May trigger automatic odds-compression by the odds-service when the
+      liability threshold is crossed.
+    bindings:
+      kafka:
+        topic: risk.exposure.updated.v1
+        partitions: 3
+        replicas: 1
+    subscribe:
+      summary: Liability exposure was recalculated for an event/selection
+      operationId: onRiskExposureUpdated
+      x-producers:
+        - service: risk-service
+      x-consumers:
+        - service: odds-service
+          purpose: Trigger automatic odds adjustment if liability threshold crossed
+      tags:
+        - name: risk-service
+        - name: odds-service
+      message:
+        $ref: '#/components/messages/RiskExposureUpdatedV1'
+
+  risk.exposure.updated.v1.dlq:
+    description: Dead-letter queue for `risk.exposure.updated.v1`.
+    bindings:
+      kafka:
+        topic: risk.exposure.updated.v1.dlq
+        x-dlq-for: risk.exposure.updated.v1
+    subscribe:
+      summary: Failed risk-exposure message
+      operationId: onRiskExposureUpdatedDlq
+      message:
+        $ref: '#/components/messages/RiskExposureUpdatedV1'
+
+  # ── NOTIFICATION SERVICE ──────────────────────────────────────────────────────
+
+  notification.events.v1:
+    description: |
+      Generic fan-out topic for user-facing notifications (SMS, email, push).
+      Produced by the notification-service after aggregating domain events.
+      Consumed by notification channel workers (one consumer group per channel type).
+    bindings:
+      kafka:
+        topic: notification.events.v1
+        partitions: 3
+        replicas: 1
+    subscribe:
+      summary: A user notification was dispatched
+      operationId: onNotificationEvent
+      x-producers:
+        - service: notification-service
+      x-consumers:
+        - service: notification-service (sms-worker consumer group)
+        - service: notification-service (email-worker consumer group)
+        - service: notification-service (push-worker consumer group)
+      tags:
+        - name: notification-service
+      message:
+        $ref: '#/components/messages/NotificationEventV1'
+
+  notification.events.v1.dlq:
+    description: Dead-letter queue for `notification.events.v1`.
+    bindings:
+      kafka:
+        topic: notification.events.v1.dlq
+        x-dlq-for: notification.events.v1
+    subscribe:
+      summary: Failed notification message
+      operationId: onNotificationEventDlq
+      message:
+        $ref: '#/components/messages/NotificationEventV1'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# COMPONENTS
+# ──────────────────────────────────────────────────────────────────────────────
+components:
+
+  messages:
+
+    OddsUpdatedV1:
+      name: OddsUpdatedV1
+      title: Odds Updated (v1)
+      summary: An operator updated the odds for an event/selection
+      contentType: application/json
+      headers:
+        type: object
+        properties:
+          kafka-key:
+            type: string
+            description: |
+              Outbox row UUID — used as the Kafka message key to maintain
+              partition affinity for the same event/selection.
+      payload:
+        $ref: '#/components/schemas/OddsUpdatedPayload'
+      examples:
+        - name: typical-home-win-odds
+          summary: Operator sets HOME to 1.90
+          payload:
+            eventId: "event-001"
+            selection: "HOME"
+            odds: 1.90
+            updatedAt: "2026-05-01T18:00:00.000Z"
+
+    BetPlacedV1:
+      name: BetPlacedV1
+      title: Bet Placed (v1)
+      summary: A punter placed a bet
+      contentType: application/json
+      headers:
+        type: object
+        properties:
+          kafka-key:
+            type: string
+            description: betId — all lifecycle events for this bet share a partition
+      payload:
+        $ref: '#/components/schemas/BetPlacedPayload'
+      examples:
+        - name: typical-bet
+          payload:
+            betId: "b5a3f2e1-0001-0000-0000-000000000001"
+            userId: "u1a2b3c4-0001-0000-0000-000000000001"
+            eventId: "event-001"
+            selection: "HOME"
+            stake: 10.00
+            odds: 1.90
+            placedAt: "2026-05-01T18:05:00.000Z"
+
+    BetCancelledV1:
+      name: BetCancelledV1
+      title: Bet Cancelled (v1)
+      summary: A punter cancelled a bet within the allowed window
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/BetCancelledPayload'
+      examples:
+        - name: typical-cancellation
+          payload:
+            betId: "b5a3f2e1-0001-0000-0000-000000000001"
+            userId: "u1a2b3c4-0001-0000-0000-000000000001"
+            cancelledAt: "2026-05-01T18:06:30.000Z"
+
+    BetSettledV1:
+      name: BetSettledV1
+      title: Bet Settled (v1)
+      summary: A bet was settled after the sporting event result was declared
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/BetSettledPayload'
+      examples:
+        - name: winning-bet
+          payload:
+            betId: "b5a3f2e1-0001-0000-0000-000000000001"
+            userId: "u1a2b3c4-0001-0000-0000-000000000001"
+            result: "WON"
+            payout: 19.00
+            settledAt: "2026-05-01T20:00:00.000Z"
+        - name: losing-bet
+          payload:
+            betId: "b5a3f2e1-0001-0000-0000-000000000002"
+            userId: "u1a2b3c4-0001-0000-0000-000000000001"
+            result: "LOST"
+            payout: 0.00
+            settledAt: "2026-05-01T20:00:00.000Z"
+
+    WalletCreditedV1:
+      name: WalletCreditedV1
+      title: Wallet Credited (v1)
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/WalletCreditedPayload'
+      examples:
+        - name: payout-credit
+          payload:
+            walletId: "w1a2b3c4-0001-0000-0000-000000000001"
+            userId: "u1a2b3c4-0001-0000-0000-000000000001"
+            amount: 19.00
+            currency: "GBP"
+            transactionId: "txn-00000001"
+            creditedAt: "2026-05-01T20:01:00.000Z"
+
+    WalletDebitedV1:
+      name: WalletDebitedV1
+      title: Wallet Debited (v1)
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/WalletDebitedPayload'
+      examples:
+        - name: stake-debit
+          payload:
+            walletId: "w1a2b3c4-0001-0000-0000-000000000001"
+            userId: "u1a2b3c4-0001-0000-0000-000000000001"
+            amount: 10.00
+            currency: "GBP"
+            transactionId: "txn-00000002"
+            debitedAt: "2026-05-01T18:05:01.000Z"
+
+    RiskExposureUpdatedV1:
+      name: RiskExposureUpdatedV1
+      title: Risk Exposure Updated (v1)
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/RiskExposureUpdatedPayload'
+      examples:
+        - name: high-liability
+          payload:
+            eventId: "event-001"
+            selection: "HOME"
+            totalStake: 50000.00
+            totalLiability: 95000.00
+            updatedAt: "2026-05-01T18:05:02.000Z"
+
+    NotificationEventV1:
+      name: NotificationEventV1
+      title: Notification Event (v1)
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/NotificationEventPayload'
+      examples:
+        - name: bet-confirmation-sms
+          payload:
+            notificationId: "notif-00000001"
+            userId: "u1a2b3c4-0001-0000-0000-000000000001"
+            channel: "SMS"
+            templateId: "bet_placed_confirmation"
+            payload:
+              betId: "b5a3f2e1-0001-0000-0000-000000000001"
+              odds: "1.90"
+              stake: "10.00"
+            sentAt: "2026-05-01T18:05:05.000Z"
+
+  schemas:
+
+    OddsUpdatedPayload:
+      type: object
+      description: |
+        Payload for `odds.updated.v1`.
+        Source schema: `shared/contracts/events/v1/odds/odds-updated.json`
+
+        **Compatibility note**: `updatedAt` is intentionally optional in this
+        shared contract to support independent deployment.  It is required in
+        the producer-side schema (`domain-schemas/odds.updated.v1.json`).
+        Promote to required here in v2 once all consumers are confirmed upgraded.
+      required:
+        - eventId
+        - selection
+        - odds
+      properties:
+        eventId:
+          type: string
+          minLength: 1
+          description: Unique identifier of the sporting event
+          example: "event-001"
+        selection:
+          type: string
+          minLength: 1
+          description: "Outcome selection within the event — e.g. HOME, DRAW, AWAY"
+          example: "HOME"
+        odds:
+          type: number
+          exclusiveMinimum: 0
+          description: Decimal odds for this selection
+          example: 1.90
+        updatedAt:
+          type: string
+          format: "date-time"
+          description: |
+            ISO-8601 timestamp. Present in all messages from odds-service >= 1.1.
+            Treat as required once all consumers are confirmed upgraded.
+          example: "2026-05-01T18:00:00.000Z"
+
+    BetPlacedPayload:
+      type: object
+      description: |
+        Payload for `betting.bet.placed.v1`.
+        Source schema: `shared/contracts/events/v1/bet/bet-placed.json`
+      required:
+        - betId
+        - userId
+        - eventId
+        - selection
+        - stake
+        - odds
+        - placedAt
+      additionalProperties: false
+      properties:
+        betId:
+          type: string
+          description: Unique bet identifier (UUID)
+        userId:
+          type: string
+          description: Punter's user identifier
+        eventId:
+          type: string
+          description: The sporting event being bet on
+        selection:
+          type: string
+          description: "The selected outcome — e.g. HOME, DRAW, AWAY"
+        stake:
+          type: number
+          exclusiveMinimum: 0
+          description: Amount staked in the account's base currency
+        odds:
+          type: number
+          exclusiveMinimum: 0
+          description: Decimal odds locked in at bet placement time
+        placedAt:
+          type: string
+          format: "date-time"
+          description: ISO-8601 timestamp of bet placement
+
+    BetCancelledPayload:
+      type: object
+      description: Payload for `betting.bet.cancelled.v1`
+      required:
+        - betId
+        - userId
+        - cancelledAt
+      additionalProperties: false
+      properties:
+        betId:
+          type: string
+        userId:
+          type: string
+        cancelledAt:
+          type: string
+          format: "date-time"
+
+    BetSettledPayload:
+      type: object
+      description: |
+        Payload for `settlement.event.settled.v1`.
+        Source schema: `shared/contracts/events/v1/bet/bet-settled.json`
+      required:
+        - betId
+        - userId
+        - result
+        - payout
+        - settledAt
+      additionalProperties: false
+      properties:
+        betId:
+          type: string
+        userId:
+          type: string
+        result:
+          type: string
+          enum: [WON, LOST, VOID]
+          description: Settlement outcome
+        payout:
+          type: number
+          minimum: 0
+          description: Amount paid out (0.00 for LOST bets)
+        settledAt:
+          type: string
+          format: "date-time"
+
+    WalletCreditedPayload:
+      type: object
+      description: |
+        Payload for `wallet.wallet.credited.v1`.
+        Source schema: `shared/contracts/events/v1/wallet/wallet-credited.json`
+      required:
+        - walletId
+        - userId
+        - amount
+        - currency
+        - transactionId
+        - creditedAt
+      additionalProperties: false
+      properties:
+        walletId:
+          type: string
+        userId:
+          type: string
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 currency code
+          example: "GBP"
+        transactionId:
+          type: string
+          description: Idempotency key — consumers must deduplicate on this field
+        creditedAt:
+          type: string
+          format: "date-time"
+
+    WalletDebitedPayload:
+      type: object
+      description: |
+        Payload for `wallet.wallet.debited.v1`.
+        Source schema: `shared/contracts/events/v1/wallet/wallet-debited.json`
+      required:
+        - walletId
+        - userId
+        - amount
+        - currency
+        - transactionId
+        - debitedAt
+      additionalProperties: false
+      properties:
+        walletId:
+          type: string
+        userId:
+          type: string
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 currency code
+        transactionId:
+          type: string
+          description: Idempotency key — consumers must deduplicate on this field
+        debitedAt:
+          type: string
+          format: "date-time"
+
+    RiskExposureUpdatedPayload:
+      type: object
+      description: |
+        Payload for `risk.exposure.updated.v1`.
+        No shared JSON Schema file yet — add one at
+        `shared/contracts/events/v1/risk/risk-exposure-updated.json` to
+        keep parity with other domains.
+      required:
+        - eventId
+        - selection
+        - totalStake
+        - totalLiability
+        - updatedAt
+      properties:
+        eventId:
+          type: string
+        selection:
+          type: string
+        totalStake:
+          type: number
+          minimum: 0
+          description: Aggregate stake across all open bets for this selection
+        totalLiability:
+          type: number
+          minimum: 0
+          description: Maximum payout the book owes if this selection wins
+        updatedAt:
+          type: string
+          format: "date-time"
+
+    NotificationEventPayload:
+      type: object
+      description: |
+        Generic notification envelope for `notification.events.v1`.
+        `templateId` maps to channel-specific templates (SMS body, email HTML,
+        push title/body). `payload` carries template variables.
+      required:
+        - notificationId
+        - userId
+        - channel
+        - templateId
+        - sentAt
+      properties:
+        notificationId:
+          type: string
+          description: Unique notification identifier (idempotency key)
+        userId:
+          type: string
+        channel:
+          type: string
+          enum: [SMS, EMAIL, PUSH]
+        templateId:
+          type: string
+          description: |
+            Known template IDs:
+            - bet_placed_confirmation
+            - bet_settled_won
+            - bet_settled_lost
+            - wallet_credited
+            - wallet_debited
+        payload:
+          type: object
+          description: Template variable map (keys depend on templateId)
+          additionalProperties: true
+        sentAt:
+          type: string
+          format: "date-time"

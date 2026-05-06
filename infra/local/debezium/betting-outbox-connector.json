@@ -1,0 +1,40 @@
+{
+  "name": "betting-outbox-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "sportsbetting",
+    "database.password": "sportsbetting",
+    "database.dbname": "sportsbetting",
+
+    "topic.prefix": "dbz.sportsbetting.betting",
+
+    "plugin.name": "pgoutput",
+    "publication.name": "betting_outbox_pub",
+    "publication.autocreate.mode": "filtered",
+    "slot.name": "betting_outbox_slot",
+
+    "table.include.list": "betting.outbox_events",
+
+    "transforms": "outbox",
+    "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+
+    "transforms.outbox.table.field.event.id": "id",
+    "transforms.outbox.table.field.event.key": "message_key",
+    "transforms.outbox.table.field.event.payload": "payload",
+    "transforms.outbox.table.field.event.timestamp": "created_at",
+
+    "transforms.outbox.route.by.field": "event_type",
+    "transforms.outbox.route.topic.replacement": "${routedByValue}",
+
+    "transforms.outbox.table.expand.json.payload": "true",
+
+    "tombstones.on.delete": "false",
+
+    "heartbeat.interval.ms": "10000",
+
+    "snapshot.mode": "initial"
+  }
+}

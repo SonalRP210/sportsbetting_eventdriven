@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+  <!-- Spring DI holds shared singleton beans; storing their references is intentional. -->
+  <Match>
+    <Class name="com.sportsbetting.platform.security.ApiKeyAuthenticationFilter"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+  <Match>
+    <Class name="com.sportsbetting.platform.security.RestAuthenticationEntryPoint"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+  <Match>
+    <Class name="com.sportsbetting.platform.security.RestAccessDeniedHandler"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+</FindBugsFilter>

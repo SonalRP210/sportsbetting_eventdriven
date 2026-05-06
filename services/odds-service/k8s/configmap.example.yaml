@@ -1,0 +1,10 @@
+# Optional non-sensitive configuration; mount as env via envFrom (deployment uses optional: true).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odds-service-config
+  labels:
+    app: odds-service
+data:
+  APP_ODDS_FEED_CHUNK_SIZE: "50"
+  APP_OUTBOX_DISPATCH_CHUNK_SIZE: "25"

@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "odds.updated.v1",
+  "description": "Published by odds-service when a price is set or changed. updatedAt is optional until all consumers have been deployed to read it, then it will be promoted to required in v2.",
   "type": "object",
-  "required": ["eventId", "selection", "odds", "updatedAt"],
+  "required": ["eventId", "selection", "odds"],
   "properties": {
-    "eventId": { "type": "string" },
+    "eventId":   { "type": "string" },
     "selection": { "type": "string" },
-    "odds": { "type": "number" },
-    "updatedAt": { "type": "string", "format": "date-time" }
-  },
-  "additionalProperties": false
+    "odds":      { "type": "number" },
+    "updatedAt": { "type": "string", "format": "date-time", "description": "ISO-8601 timestamp. Present in all messages produced from odds-service >= this version. Treat as required once all consumers are confirmed upgraded." }
+  }
 }

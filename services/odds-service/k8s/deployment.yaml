@@ -12,16 +12,54 @@ spec:
       labels:
         app: odds-service
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: odds-service
       containers:
         - name: odds-service
           image: odds-service:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          envFrom:
+            # Non-secret URLs / tuning — copy configmap.example.yaml → odds-service-config (optional).
+            - configMapRef:
+                name: odds-service-config
+                optional: true
+            # Require odds-service-secrets — copy secret.example.yaml and replace placeholders before deploy.
+            - secretRef:
+                name: odds-service-secrets
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: production
           ports:
-            - containerPort: 8085
+            - name: http
+              containerPort: 8080
           readinessProbe:
             httpGet:
-              path: /health
-              port: 8085
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
           livenessProbe:
             httpGet:
-              path: /health
-              port: 8085
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+      volumes:
+        - name: tmp
+          emptyDir: {}

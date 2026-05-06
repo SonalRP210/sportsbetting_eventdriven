@@ -32,8 +32,8 @@
 
   <modules>
     <module>platform/event-support</module>
+    <module>platform/service-security</module>
     <module>services/api-gateway</module>
-    <module>services/auth-service</module>
     <module>services/user-service</module>
     <module>services/betting-service</module>
     <module>services/wallet-service</module>
@@ -52,6 +52,11 @@
         <version>${project.version}</version>
       </dependency>
       <dependency>
+        <groupId>com.sportsbetting</groupId>
+        <artifactId>service-security</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
         <groupId>org.testcontainers</groupId>
         <artifactId>testcontainers-bom</artifactId>
         <version>${testcontainers.version}</version>
@@ -67,6 +72,13 @@
         <groupId>io.rest-assured</groupId>
         <artifactId>rest-assured</artifactId>
         <version>${restassured.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>2023.0.5</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>

@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "outbox_events")
+@Table(schema = "betting", name = "outbox_events")
 public class OutboxEventEntity {
 
     @Id
@@ -20,6 +20,12 @@ public class OutboxEventEntity {
 
     @Column(nullable = false, length = 8000)
     private String payload;
+
+    /**
+     * Kafka message key (e.g. betId) for partition affinity; used by Debezium Outbox EventRouter SMT.
+     */
+    @Column(name = "message_key")
+    private String messageKey;
 
     @Column(nullable = false)
     private boolean published;
@@ -36,6 +42,8 @@ public class OutboxEventEntity {
     public void setEventType(String eventType) { this.eventType = eventType; }
     public String getPayload() { return payload; }
     public void setPayload(String payload) { this.payload = payload; }
+    public String getMessageKey() { return messageKey; }
+    public void setMessageKey(String messageKey) { this.messageKey = messageKey; }
     public boolean isPublished() { return published; }
     public void setPublished(boolean published) { this.published = published; }
     public Instant getCreatedAt() { return createdAt; }
