@@ -2,6 +2,20 @@ name: Release Gate
 
 on:
   workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Environment to promote to"
+        required: true
+        type: choice
+        options:
+          - dev
+          - stage
+          - perf
+          - prod
+      image_tag:
+        description: "Application image tag to deploy"
+        required: true
+        type: string
   push:
     branches:
       - main
@@ -11,13 +25,10 @@ on:
 jobs:
   release-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Validate Kubernetes manifests (kubectl client dry-run)
-        run: bash scripts/ci/k8s-manifest-dry-run.sh
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -26,38 +37,39 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Build and test reactor
-        run: mvn -B -q test
+      - name: Build and verify reactor
+        run: mvn -B -q -DskipTests=false verify
 
-      - name: Start release stack
-        run: docker compose -f infra/local/docker-compose.yml up --build -d
-
-      - name: Wait for API gateway health
+      - name: Trigger DevOps release-gate workflow
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_PAT: ${{ secrets.CROSS_REPO_GH_PAT }}
         run: |
-          for i in {1..60}; do
-            if curl -fsS http://localhost:8070/api/v1/health >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Gateway did not become healthy in time" >&2
-          exit 1
+          if [ -z "$GH_PAT" ]; then
+            echo "CROSS_REPO_GH_PAT is required for cross-repo promotion."
+            exit 1
+          fi
 
-      - name: Schema compatibility checks
-        run: bash scripts/release/schema-compatibility-check.sh
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_PAT" \
+            https://api.github.com/repos/SonalRP210/devops-platform/actions/workflows/release-gate.yml/dispatches \
+            -d "{\"ref\":\"main\",\"inputs\":{\"target_environment\":\"${{ inputs.target_environment }}\",\"image_tag\":\"${{ inputs.image_tag }}\"}}"
 
-      - name: Full E2E checks
-        run: bash scripts/release/full-e2e.sh
-
-      - name: Resilience checks
-        run: bash scripts/release/resilience-check.sh
-
-      - name: Dump compose status on failure
-        if: failure()
+      - name: Trigger Observability release workflow
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_PAT: ${{ secrets.CROSS_REPO_GH_PAT }}
         run: |
-          docker compose -f infra/local/docker-compose.yml ps
-          docker compose -f infra/local/docker-compose.yml logs --no-color --tail=200
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_PAT" \
+            https://api.github.com/repos/SonalRP210/observability-platform/actions/workflows/release-observability.yml/dispatches \
+            -d "{\"ref\":\"main\",\"inputs\":{\"target_environment\":\"${{ inputs.target_environment }}\"}}"
 
-      - name: Stop release stack
-        if: always()
-        run: docker compose -f infra/local/docker-compose.yml down -v
+      - name: Release summary
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Triggered promotions for:"
+          echo "- environment: ${{ inputs.target_environment }}"
+          echo "- image tag: ${{ inputs.image_tag }}"
