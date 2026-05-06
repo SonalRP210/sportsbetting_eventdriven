@@ -9,10 +9,6 @@ Operational and observability assets were extracted to:
 
 ## Moved Areas
 
-- `infra/keycloak/`
-- `infra/local/`
-- `scripts/performance/`
-- `scripts/smoke_odds_feed_via_gateway.py`
-- `observability/grafana/dashboards/sportsbetting-loadtest-event-platform.json`
-- `observability/prometheus/prometheus.yml`
-- `observability/prometheus/prometheus.loadtest-gateway-odds-betting.yml`
+- `infra/` -> moved to `devops-platform` (`platform/`, `environments/`, `scripts/`)
+- `scripts/` -> moved to `devops-platform` (`loadtests/`, `scripts/`)
+- `observability/` -> moved to `observability-platform` (`grafana/`, `prometheus/`, `loki/`, `tempo/`)
