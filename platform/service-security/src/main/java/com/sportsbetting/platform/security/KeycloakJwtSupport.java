@@ -23,34 +23,36 @@ public final class KeycloakJwtSupport {
     public static JwtAuthenticationConverter realmRolesJwtAuthenticationConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         JwtGrantedAuthoritiesConverter scopes = new JwtGrantedAuthoritiesConverter();
-        converter.setJwtGrantedAuthoritiesConverter(jwt -> realmRolesPlusScopes(scopes, jwt));
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            Collection<GrantedAuthority> combined = new ArrayList<>();
+            if (jwt == null) {
+                return Collections.unmodifiableCollection(combined);
+            }
+            Collection<GrantedAuthority> scopeAuthorities = scopes.convert(jwt);
+            if (scopeAuthorities != null) {
+                combined.addAll(scopeAuthorities);
+            }
+            Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess == null) {
+                return Collections.unmodifiableCollection(combined);
+            }
+            Object rolesObj = realmAccess.get("roles");
+            if (!(rolesObj instanceof List<?> roles)) {
+                return Collections.unmodifiableCollection(combined);
+            }
+            for (Object r : roles) {
+                if (r == null) {
+                    continue;
+                }
+                String name = r.toString();
+                if (name.isBlank()) {
+                    continue;
+                }
+                String authority = name.startsWith("ROLE_") ? name : "ROLE_" + name;
+                combined.add(new SimpleGrantedAuthority(authority));
+            }
+            return Collections.unmodifiableCollection(combined);
+        });
         return converter;
-    }
-
-    private static Collection<GrantedAuthority> realmRolesPlusScopes(
-            JwtGrantedAuthoritiesConverter scopes,
-            Jwt jwt
-    ) {
-        Collection<GrantedAuthority> combined = new ArrayList<>(scopes.convert(jwt));
-        Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
-        if (realmAccess == null) {
-            return Collections.unmodifiableCollection(combined);
-        }
-        Object rolesObj = realmAccess.get("roles");
-        if (!(rolesObj instanceof List<?> roles)) {
-            return Collections.unmodifiableCollection(combined);
-        }
-        for (Object r : roles) {
-            if (r == null) {
-                continue;
-            }
-            String name = r.toString();
-            if (name.isBlank()) {
-                continue;
-            }
-            String authority = name.startsWith("ROLE_") ? name : "ROLE_" + name;
-            combined.add(new SimpleGrantedAuthority(authority));
-        }
-        return Collections.unmodifiableCollection(combined);
     }
 }
