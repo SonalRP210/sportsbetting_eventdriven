@@ -1,0 +1,125 @@
+name: CI PR
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: write
+
+env:
+  JAVA_VERSION: "21"
+  TRIVY_SEVERITY: "HIGH,CRITICAL"
+
+jobs:
+  detect-backend-changes:
+    name: Detect Backend Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.changes.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            backend:
+              - 'platform/**'
+              - 'services/**'
+              - 'shared/contracts/**'
+              - '**/db/migration/**'
+              - '**/liquibase/**'
+              - 'pom.xml'
+              - '**/pom.xml'
+
+  fast-tests:
+    name: Fast Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Unit and slice tests
+        run: mvn -B -q test
+
+  sonar-pr:
+    name: SonarQube PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [fast-tests]
+    if: vars.SONAR_HOST_URL != ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: SonarQube PR analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        run: >
+          mvn -B -q verify sonar:sonar
+          -Dsonar.host.url=${SONAR_HOST_URL}
+          -Dsonar.token=${SONAR_TOKEN}
+          -Dsonar.qualitygate.wait=true
+          -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
+          -Dsonar.pullrequest.branch=${{ github.head_ref }}
+          -Dsonar.pullrequest.base=${{ github.base_ref }}
+          -DskipITs=true
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [fast-tests]
+    steps:
+      - uses: actions/dependency-review-action@v4
+
+  trivy-fs:
+    name: Trivy Filesystem
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [fast-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy fs scan (SARIF)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: ${{ env.TRIVY_SEVERITY }}
+      - name: Upload Trivy fs SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+
+  integration-verify-conditional:
+    name: Integration Verify (Conditional)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [fast-tests, detect-backend-changes]
+    if: needs.detect-backend-changes.outputs.backend == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Integration verify for backend-impacting PRs
+        run: mvn -B -q -Pquality-tools verify

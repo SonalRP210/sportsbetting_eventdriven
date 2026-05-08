@@ -1,0 +1,12 @@
+# Trivy ignore template
+#
+# Format:
+#   <VULNERABILITY_ID> [# optional reason and expiry]
+#
+# Keep this file small and time-boxed. Prefer fixing findings over ignoring.
+# Revisit ignores regularly (for example monthly).
+#
+# Examples:
+# CVE-2023-12345 # accepted risk: no fix available; review by 2026-09-30
+# GHSA-xxxx-yyyy-zzzz # false positive in unused transitive dependency
+

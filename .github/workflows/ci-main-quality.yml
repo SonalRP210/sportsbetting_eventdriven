@@ -1,0 +1,111 @@
+name: CI Main Quality
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  JAVA_VERSION: "21"
+  TRIVY_SEVERITY: "HIGH,CRITICAL"
+
+jobs:
+  verify:
+    name: Full Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Full Maven verify (quality profile)
+        run: mvn -B -q -Pquality-tools verify
+
+  sonar-main:
+    name: SonarQube Main
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: [verify]
+    if: vars.SONAR_HOST_URL != ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: SonarQube branch analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        run: >
+          mvn -B -q verify sonar:sonar
+          -Dsonar.host.url=${SONAR_HOST_URL}
+          -Dsonar.token=${SONAR_TOKEN}
+          -Dsonar.qualitygate.wait=true
+          -DskipITs=true
+
+  trivy-image:
+    name: Trivy Image Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [verify]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api-gateway
+            dockerfile: services/api-gateway/Dockerfile
+          - service: user-service
+            dockerfile: services/user-service/Dockerfile
+          - service: betting-service
+            dockerfile: services/betting-service/Dockerfile
+          - service: wallet-service
+            dockerfile: services/wallet-service/Dockerfile
+          - service: odds-service
+            dockerfile: services/odds-service/Dockerfile
+          - service: event-ingestion-service
+            dockerfile: services/event-ingestion-service/Dockerfile
+          - service: settlement-service
+            dockerfile: services/settlement-service/Dockerfile
+          - service: notification-service
+            dockerfile: services/notification-service/Dockerfile
+          - service: risk-service
+            dockerfile: services/risk-service/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build image for scan
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: local/${{ matrix.service }}:${{ github.sha }}
+          provenance: false
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: local/${{ matrix.service }}:${{ github.sha }}
+          format: sarif
+          output: trivy-image-${{ matrix.service }}.sarif
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: ${{ env.TRIVY_SEVERITY }}
+      - name: Upload Trivy image SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image-${{ matrix.service }}.sarif

@@ -82,7 +82,23 @@ Alternatively, add roles and client scope mappings in the Keycloak Admin UI. A s
   - Full E2E checks: `bash scripts/release/full-e2e.sh`
   - Resilience checks (broker restart): `bash scripts/release/resilience-check.sh`
 
-The **test matrix** workflow (`.github/workflows/test-matrix.yml`) runs the same manifest dry-run in job **`k8s-manifests`** on pull requests and pushes.
+## CI (Open Source Tooling)
+
+This repository uses open-source CI checks with GitHub Actions, SonarQube, and Trivy.
+
+- PR checks (`.github/workflows/ci-pr.yml`):
+  - `Fast Tests` (`mvn test`) for unit/slice tests
+  - `Integration Verify (Conditional)` (`mvn -Pquality-tools verify`) when backend-impacting files change
+  - `SonarQube PR` quality gate (when `SONAR_HOST_URL` + `SONAR_TOKEN` are configured)
+  - `Dependency Review`
+  - `Trivy Filesystem` scan (SARIF uploaded to Security tab)
+- Main checks (`.github/workflows/ci-main-quality.yml`):
+  - `Full Verify` (`mvn -Pquality-tools verify`) including integration and static analysis gates
+  - `SonarQube Main` quality gate (when Sonar is configured)
+  - `Trivy Image Scan` matrix for service Docker images (SARIF uploaded to Security tab)
+- Release checks (`.github/workflows/ci-release-artifacts.yml`):
+  - `Package Artifacts` (build and upload jars)
+  - `Docker Build Validation` (build-only validation for service images)
 
 ## Test Strategy Implemented
 
