@@ -34,6 +34,15 @@ Example manifests live under `services/odds-service/k8s/` and `services/betting-
 - **odds-service** listens on container port **8080**; probes use **`/actuator/health/readiness`** and **`/actuator/health/liveness`**.
 - **betting-service** listens on container port **8084**; same actuator probe paths (Service `targetPort` is the named port **`http`**).
 
+For local Docker Desktop Kubernetes testing of the gateway, build the image into Docker Desktop, deploy it, and port-forward the Service port:
+
+```powershell
+docker build -t api-gateway:latest -f services/api-gateway/Dockerfile .
+kubectl create namespace sportsbetting --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n sportsbetting apply -f services/api-gateway/k8s/
+kubectl -n sportsbetting port-forward svc/api-gateway 8081:80
+```
+
 Additional examples (odds and betting): **`pdb.yaml`**, **`networkpolicy.example.yaml`**, **`vault-agent-injector.example.yaml`**. NetworkPolicy container ports must match the app (**8080** vs **8084**).
 
 ## HTTP API security (docker / production)
