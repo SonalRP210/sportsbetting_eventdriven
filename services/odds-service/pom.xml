@@ -51,6 +51,16 @@
   <!-- Activate with -Pvault when building images or jars that should talk to HashiCorp Vault at runtime. -->
   <profiles>
     <profile>
+      <id>mtls-lab</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.sportsbetting</groupId>
+          <artifactId>mtls-spring-boot-starter</artifactId>
+          <version>${mtls.starter.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
       <id>vault</id>
       <dependencies>
         <dependency>

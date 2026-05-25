@@ -70,10 +70,11 @@ Alternatively, add roles and client scope mappings in the Keycloak Admin UI. A s
 
 - Prometheus endpoint is exposed on all services at `/actuator/prometheus`.
 - When HTTP security is enabled (`production` / secured stacks), scrapes must authenticate; patterns and examples are in `docs/operations/production-hardening.md` (section **Prometheus metrics (secured actuator)**) and `docs/operations/examples/prometheus-scrape-secured-actuator.yaml`.
-- Local stack includes:
+- Local stacks are owned by the sibling `devops-platform` repo and mount dashboards/rules from `observability-platform`.
+- Local stack endpoints include:
   - Prometheus: [http://localhost:9090](http://localhost:9090)
   - Grafana: [http://localhost:3000](http://localhost:3000) (default login `admin` / `admin`)
-- Grafana dashboards are provisioned from `observability/grafana/dashboards`.
+- mTLS lab integration and troubleshooting checks are documented in `docs/sportsbetting-integration.md`.
 
 ## Event Platform Notes
 

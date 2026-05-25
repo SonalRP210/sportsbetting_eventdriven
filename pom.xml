@@ -28,6 +28,7 @@
     <testcontainers.version>1.20.1</testcontainers.version>
     <awaitility.version>4.2.1</awaitility.version>
     <restassured.version>5.5.0</restassured.version>
+    <mtls.starter.version>${project.version}</mtls.starter.version>
   </properties>
 
   <modules>
