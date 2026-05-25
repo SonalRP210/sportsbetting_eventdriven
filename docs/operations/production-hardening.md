@@ -51,6 +51,7 @@ This document captures gaps called out for production deployments that are not f
 - **OutboxPoller** increments `outbox.dispatch.failures` and logs at **warn** when dispatch throws (polling fallback mode).
 - Prometheus alert rules (scoped by `**pod`/`container`** matching the Deployment; optional `**namespace`** if needed): `infra/monitoring/prometheus/rules/odds-service.rules.yml`.
 - Define SLO dashboards: ingest RPS, HTTP p95/p99, consumer lag on `odds.updated.v1`, outbox row age / cleanup volume, Postgres slot lag, HTTP 5xx.
+- Import `docs/operations/examples/grafana-kafka-consumer-group-lag-dashboard.json` into Grafana, or copy it into the observability platform dashboard provisioning directory, to show Kafka consumer group lag by group, topic, and partition. It expects Kafka exporter metrics such as `kafka_consumergroup_lag` to be available in Prometheus.
 
 ## Prometheus metrics (secured actuator)
 
