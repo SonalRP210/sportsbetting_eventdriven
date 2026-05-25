@@ -70,6 +70,7 @@ Alternatively, add roles and client scope mappings in the Keycloak Admin UI. A s
 
 - Prometheus endpoint is exposed on all services at `/actuator/prometheus`.
 - When HTTP security is enabled (`production` / secured stacks), scrapes must authenticate; patterns and examples are in `docs/operations/production-hardening.md` (section **Prometheus metrics (secured actuator)**) and `docs/operations/examples/prometheus-scrape-secured-actuator.yaml`.
+- Kafka consumer group lag can be shown in Grafana by importing `docs/operations/examples/grafana-kafka-consumer-group-lag-dashboard.json` or copying it into the observability platform dashboard provisioning directory. The dashboard expects Prometheus to scrape Kafka exporter metrics named `kafka_consumergroup_lag`.
 - Local stack includes:
   - Prometheus: [http://localhost:9090](http://localhost:9090)
   - Grafana: [http://localhost:3000](http://localhost:3000) (default login `admin` / `admin`)
