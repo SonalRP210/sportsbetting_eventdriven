@@ -3,6 +3,7 @@ package com.sportsbetting.apigateway.config;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.web.client.RestClientSsl;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
@@ -13,8 +14,8 @@ import org.springframework.web.client.RestClient;
  * when backends use HTTPS / mTLS.
  */
 @Configuration
+@ConditionalOnProperty(name = "gateway.downstream.mtls.enabled", havingValue = "false", matchIfMissing = true)
 public class GatewayRestClientConfig {
-
     @Bean
     RestClient gatewayRestClient(
             RestClient.Builder restClientBuilder,

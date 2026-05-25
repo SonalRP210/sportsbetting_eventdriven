@@ -10,6 +10,5 @@ import org.springframework.security.config.annotation.web.configurers.AuthorizeH
  */
 @FunctionalInterface
 public interface HttpApiAuthorizationCustomizer {
-
     void customize(AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth);
 }

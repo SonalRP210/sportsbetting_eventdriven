@@ -21,7 +21,8 @@ public class DockerActuatorSecurityCustomizer {
                         "/actuator/prometheus",
                         "/actuator/metrics",
                         "/actuator/metrics/**",
-                        "/actuator/info"
+                        "/actuator/info",
+                        "/mtls/**"
                 )
                 .permitAll();
     }

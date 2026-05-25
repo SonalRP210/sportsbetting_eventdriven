@@ -28,6 +28,7 @@
     <testcontainers.version>1.20.1</testcontainers.version>
     <awaitility.version>4.2.1</awaitility.version>
     <restassured.version>5.5.0</restassured.version>
+    <mtls.starter.version>1.0.0-SNAPSHOT</mtls.starter.version>
   </properties>
 
   <modules>
@@ -79,6 +80,11 @@
         <version>2023.0.5</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.example.mtls</groupId>
+        <artifactId>mtls-spring-boot-starter</artifactId>
+        <version>${mtls.starter.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
