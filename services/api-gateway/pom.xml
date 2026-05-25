@@ -26,5 +26,17 @@
     </dependency>
   </dependencies>
   <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+  <profiles>
+    <profile>
+      <id>mtls-lab</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.sportsbetting</groupId>
+          <artifactId>mtls-spring-boot-starter</artifactId>
+          <version>${mtls.starter.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
 </project>
 
