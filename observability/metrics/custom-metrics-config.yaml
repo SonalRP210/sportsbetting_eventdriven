@@ -1,0 +1,125 @@
+# Custom Business Metrics Registration
+# These metrics must be registered by each service's MetricsConfiguration class
+
+betting-service:
+  counters:
+    - name: betting_bets_placed_total
+      description: "Total number of bets placed"
+      tags: [environment, bet_type, sport, market]
+
+    - name: betting_bet_failures_total
+      description: "Total number of failed bet placements"
+      tags: [environment, reason, bet_type]
+
+    - name: betting_settlement_total
+      description: "Total bet settlements processed"
+      tags: [environment, outcome, sport]
+
+    - name: betting_settlement_failures_total
+      description: "Total failed bet settlements"
+      tags: [environment, reason]
+
+    - name: betting_payout_total
+      description: "Total payouts processed"
+      tags: [environment, status]
+
+  histograms:
+    - name: betting_bet_placement_duration_seconds
+      description: "Duration of bet placement operation"
+      tags: [environment, bet_type]
+      slo: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+
+    - name: betting_payout_duration_seconds
+      description: "Duration of payout processing"
+      tags: [environment]
+      slo: [0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+
+    - name: betting_settlement_duration_seconds
+      description: "Duration of settlement processing"
+      tags: [environment]
+      slo: [0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0]
+
+  gauges:
+    - name: betting_active_bets
+      description: "Number of currently active (unsettled) bets"
+      tags: [environment, sport]
+
+    - name: betting_pending_settlements
+      description: "Number of pending settlements in queue"
+      tags: [environment]
+
+odds-service:
+  counters:
+    - name: odds_updates_total
+      description: "Total odds updates received from feed"
+      tags: [environment, sport, market, source]
+
+    - name: odds_calculation_total
+      description: "Total odds calculations performed"
+      tags: [environment, sport, market]
+
+    - name: odds_distribution_total
+      description: "Total odds distributions to consumers"
+      tags: [environment, sport, channel]
+
+  histograms:
+    - name: odds_calculation_duration_seconds
+      description: "Duration of odds calculation"
+      tags: [environment, sport, complexity]
+      slo: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5]
+
+    - name: odds_feed_processing_duration_seconds
+      description: "Duration of processing odds feed update"
+      tags: [environment, source]
+      slo: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+
+    - name: odds_distribution_duration_seconds
+      description: "Duration of odds distribution to downstream"
+      tags: [environment, channel]
+      slo: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1]
+
+  gauges:
+    - name: odds_stale_count
+      description: "Number of stale odds (not updated within threshold)"
+      tags: [environment, sport, market]
+
+    - name: odds_total_count
+      description: "Total number of active odds"
+      tags: [environment, sport]
+
+    - name: odds_feed_lag_seconds
+      description: "Lag between odds feed timestamp and processing time"
+      tags: [environment, source]
+
+api-gateway:
+  counters:
+    - name: gateway_requests_total
+      description: "Total gateway requests"
+      tags: [environment, route, method, status]
+
+    - name: gateway_timeout_total
+      description: "Total gateway timeouts"
+      tags: [environment, route, downstream_service]
+
+    - name: jwt_validation_failures_total
+      description: "Total JWT validation failures"
+      tags: [environment, reason]
+
+    - name: gateway_rate_limit_total
+      description: "Total rate limit triggers"
+      tags: [environment, route, client]
+
+  histograms:
+    - name: gateway_request_duration_seconds
+      description: "Gateway request duration including downstream"
+      tags: [environment, route]
+      slo: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+
+  gauges:
+    - name: gateway_active_connections
+      description: "Number of active gateway connections"
+      tags: [environment]
+
+    - name: gateway_circuit_breaker_state
+      description: "Circuit breaker state (0=closed, 1=open, 2=half-open)"
+      tags: [environment, name, downstream_service]

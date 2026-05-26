@@ -1,0 +1,140 @@
+# Trace Context Propagation Configuration
+# Ensures end-to-end correlation across all services
+
+propagation:
+  # W3C Trace Context (primary)
+  w3c:
+    enabled: true
+    fields:
+      - traceparent
+      - tracestate
+
+  # B3 (for backward compatibility with existing services)
+  b3:
+    enabled: true
+    fields:
+      - X-B3-TraceId
+      - X-B3-SpanId
+      - X-B3-ParentSpanId
+      - X-B3-Sampled
+
+# Custom context fields propagated via headers and Kafka headers
+custom_context:
+  http_headers:
+    - name: X-Request-Id
+      mdc_key: requestId
+      generate_if_missing: true
+
+    - name: X-Correlation-Id
+      mdc_key: correlationId
+      generate_if_missing: true
+
+    - name: X-User-Id
+      mdc_key: userId
+      generate_if_missing: false
+
+    - name: X-Betting-Slip-Id
+      mdc_key: bettingSlipId
+      generate_if_missing: false
+
+  kafka_headers:
+    - name: requestId
+      mdc_key: requestId
+
+    - name: correlationId
+      mdc_key: correlationId
+
+    - name: eventId
+      mdc_key: eventId
+      generate_if_missing: true
+
+    - name: userId
+      mdc_key: userId
+
+    - name: bettingSlipId
+      mdc_key: bettingSlipId
+
+    - name: sourceService
+      mdc_key: sourceService
+
+    - name: eventTimestamp
+      mdc_key: eventTimestamp
+
+# Span attributes enrichment
+span_attributes:
+  # Always add these attributes to spans
+  required:
+    - key: service.name
+      source: spring.application.name
+    - key: service.version
+      source: app.version
+    - key: deployment.environment
+      source: ENVIRONMENT
+
+  # Conditionally add based on context
+  conditional:
+    - key: betting.slip.id
+      source: mdc:bettingSlipId
+      when: present
+
+    - key: user.id
+      source: mdc:userId
+      when: present
+
+    - key: kafka.topic
+      source: messaging.destination
+      when: kafka_span
+
+    - key: kafka.partition
+      source: messaging.kafka.partition
+      when: kafka_span
+
+    - key: kafka.offset
+      source: messaging.kafka.offset
+      when: kafka_span
+
+    - key: kafka.consumer_group
+      source: messaging.kafka.consumer_group
+      when: kafka_consumer_span
+
+# Trace flow expected paths (for validation/alerting)
+expected_flows:
+  bet_placement:
+    description: "End-to-end bet placement flow"
+    path:
+      - service: api-gateway
+        operation: "POST /api/bets"
+      - service: betting-service
+        operation: "kafka-consume:bet-requests"
+      - service: betting-service
+        operation: "db:validate-bet"
+      - service: odds-service
+        operation: "grpc:get-current-odds"
+      - service: betting-service
+        operation: "db:place-bet"
+      - service: betting-service
+        operation: "kafka-produce:bet-confirmations"
+
+  odds_update:
+    description: "Odds update propagation flow"
+    path:
+      - service: odds-service
+        operation: "feed:receive-update"
+      - service: odds-service
+        operation: "calculate-odds"
+      - service: odds-service
+        operation: "kafka-produce:odds-updates"
+      - service: betting-service
+        operation: "kafka-consume:odds-updates"
+
+  settlement:
+    description: "Bet settlement flow"
+    path:
+      - service: betting-service
+        operation: "kafka-consume:event-results"
+      - service: betting-service
+        operation: "db:settle-bets"
+      - service: betting-service
+        operation: "kafka-produce:payout-requests"
+      - service: betting-service
+        operation: "process-payout"

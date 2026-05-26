@@ -1,0 +1,137 @@
+# Pod annotation template for observability
+# Apply these annotations to all service deployments
+
+# Required pod annotations for Prometheus scraping
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/actuator/prometheus"
+
+# Required labels for service identification
+labels:
+  app: "<service-name>"
+  version: "<service-version>"
+  environment: "<environment>"
+  team: "platform"
+  monitored: "true"
+
+---
+# Example: API Gateway deployment annotations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: sportsbetting
+  labels:
+    app: api-gateway
+    version: "1.0.0"
+    monitored: "true"
+spec:
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+      labels:
+        app: api-gateway
+        version: "1.0.0"
+        monitored: "true"
+    spec:
+      containers:
+        - name: api-gateway
+          env:
+            - name: ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "api-gateway"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.namespace=sportsbetting,deployment.environment=$(ENVIRONMENT)"
+---
+# Example: Betting Service deployment annotations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: betting-service
+  namespace: sportsbetting
+  labels:
+    app: betting-service
+    version: "1.0.0"
+    monitored: "true"
+spec:
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+      labels:
+        app: betting-service
+        version: "1.0.0"
+        monitored: "true"
+    spec:
+      containers:
+        - name: betting-service
+          env:
+            - name: ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "betting-service"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.namespace=sportsbetting,deployment.environment=$(ENVIRONMENT)"
+---
+# Example: Odds Service deployment annotations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: odds-service
+  namespace: sportsbetting
+  labels:
+    app: odds-service
+    version: "1.0.0"
+    monitored: "true"
+spec:
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+      labels:
+        app: odds-service
+        version: "1.0.0"
+        monitored: "true"
+    spec:
+      containers:
+        - name: odds-service
+          env:
+            - name: ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "odds-service"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.namespace=sportsbetting,deployment.environment=$(ENVIRONMENT)"

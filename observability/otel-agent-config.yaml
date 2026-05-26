@@ -1,0 +1,59 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: 512
+    timeout: 5s
+
+  resource:
+    attributes:
+      - key: service.namespace
+        value: sportsbetting
+        action: upsert
+      - key: deployment.environment
+        from_attribute: ENVIRONMENT
+        action: upsert
+
+  # Enrich spans with Kubernetes metadata
+  k8sattributes:
+    auth_type: serviceAccount
+    extract:
+      metadata:
+        - k8s.namespace.name
+        - k8s.pod.name
+        - k8s.deployment.name
+        - k8s.node.name
+      labels:
+        - tag_name: service.name
+          key: app
+          from: pod
+        - tag_name: service.version
+          key: version
+          from: pod
+
+exporters:
+  otlp:
+    endpoint: otel-collector.observability:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resource, k8sattributes, batch]
+      exporters: [otlp]
+    metrics:
+      receivers: [otlp]
+      processors: [resource, k8sattributes, batch]
+      exporters: [otlp]
+    logs:
+      receivers: [otlp]
+      processors: [resource, k8sattributes, batch]
+      exporters: [otlp]
